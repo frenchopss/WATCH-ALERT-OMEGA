@@ -72,7 +72,8 @@ def main():
     state = load_json(STATE_FILE, {"seen_ids": []})
     seen = set(state.get("seen_ids", []))
 
-    first_run = (len(seen) == 0)
+    initialized = state.get("initialized", False)
+first_run = not initialized
     new_seen = set(seen)
 
     for q in cfg.get("queries", []):
