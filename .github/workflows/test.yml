@@ -1,5 +1,3 @@
-.github/workflows/test.yml
-
 name: Test Discord Alert
 
 on:
