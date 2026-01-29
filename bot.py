@@ -112,13 +112,7 @@ def main():
                 new_hits += 1
                 discord_notify(webhook_env, f"🔔 **{name}**\n{it['title']}\n{it['url']}")
 
-        # Message par salon : initialisation une seule fois, puis résumé de run
-        if first_run:
-            discord_notify(webhook_env, "✅ V1 (Vinted-only) initialisée : historique chargé (pas d’alertes au 1er run).")
-        else:
-            discord_notify(webhook_env, f"✅ V1 (Vinted-only) run terminé : {new_hits} nouvelle(s) alerte(s).")
-
-    # Sauvegarde état + verrouillage de l'initialisation
+       # Sauvegarde état + verrouillage de l'initialisation
     state["seen_ids"] = list(new_seen)[-8000:]
     state["initialized"] = True
     save_json(STATE_FILE, state)
