@@ -34,7 +34,7 @@ def fetch_html(url: str):
     try:
         r = requests.get(url, headers=HEADERS, timeout=30)
         if r.status_code in (403, 429):
-            print(f"[BLOCKED] {url}")
+            print(f"[BLOCKED] {r.status_code} {url}")
             return None
         r.raise_for_status()
         return r.text
@@ -64,7 +64,11 @@ def discord_notify(webhook_env: str, content: str):
     if not url:
         print("[NO WEBHOOK]", webhook_env)
         return
-    requests.post(url, json={"content": content}, timeout=15)
+    try:
+        resp = requests.post(url, json={"content": content}, timeout=15)
+        print(f"[DISCORD] {webhook_env} status={resp.status_code}")
+    except Exception as e:
+        print("[DISCORD ERROR]", e)
 
 
 # ------------------ vinted parsing ------------------
@@ -79,11 +83,18 @@ def parse_vinted_listings(html: str):
             continue
 
         url = href if href.startswith("http") else "https://www.vinted.fr" + href
-        title = a.get_text(" ", strip=True)
+
+        # plus robuste que get_text seul
+        title = (
+            a.get("title")
+            or a.get("aria-label")
+            or a.get_text(" ", strip=True)
+            or "Annonce Vinted"
+        )
 
         listings.append({
             "id": url,
-            "title": title or "Annonce Vinted",
+            "title": title,
             "url": url
         })
 
@@ -110,25 +121,25 @@ def main():
 
         print(f"[QUERY] {name} urls={len(urls)}")
 
-for u in urls:
-    html = fetch_html(u)
-    if not html:
-        continue
+        for u in urls:
+            html = fetch_html(u)
+            if not html:
+                continue
 
-    items = parse_vinted_listings(html)
-    print(f"[READ] {name} -> {len(items)} items")
+            items = parse_vinted_listings(html)
+            print(f"[READ] {name} -> {len(items)} items")
 
-    for i, it in enumerate(items[:5]):
-        print(f"[SAMPLE] {name} #{i+1}: {it['title'][:120]}")
+            for i, it in enumerate(items[:5]):
+                print(f"[SAMPLE] {name} #{i+1}: {it['title'][:120]}")
 
-    for it in items:
-        if it["id"] in seen:
-            continue
+            for it in items:
+                if it["id"] in seen:
+                    continue
 
                 if not matches(it["title"], include, exclude):
                     continue
 
-                # ✅ SEULEMENT ICI on considère l’annonce comme vue
+                # ✅ on marque "vu" uniquement si ça déclenche une alerte
                 new_seen.add(it["id"])
                 alerts += 1
 
