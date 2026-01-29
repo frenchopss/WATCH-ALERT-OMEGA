@@ -15,12 +15,12 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Download state artifact (if exists)
-        uses: actions/download-artifact@v4
+      # ✅ RESTORE seen.json depuis le cache (persiste entre runs)
+      - name: Restore seen.json cache
+        uses: actions/cache@v4
         with:
-          name: watch-alert-state
-          path: .
-        continue-on-error: true
+          path: seen.json
+          key: watch-alert-seen-v1
 
       - name: Install deps
         run: pip install -r requirements.txt
@@ -33,11 +33,3 @@ jobs:
           WEBHOOK_MIDO: ${{ secrets.WEBHOOK_MIDO }}
           WEBHOOK_FC: ${{ secrets.WEBHOOK_FC }}
         run: python bot.py
-
-      - name: Upload state artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: watch-alert-state
-          path: seen.json
-          if-no-files-found: error
-          retention-days: 7
