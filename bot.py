@@ -110,17 +110,20 @@ def main():
 
         print(f"[QUERY] {name} urls={len(urls)}")
 
-        for u in urls:
-            html = fetch_html(u)
-            if not html:
-                continue
+for u in urls:
+    html = fetch_html(u)
+    if not html:
+        continue
 
-            items = parse_vinted_listings(html)
-            print(f"[READ] {name} -> {len(items)} items")
+    items = parse_vinted_listings(html)
+    print(f"[READ] {name} -> {len(items)} items")
 
-            for it in items:
-                if it["id"] in seen:
-                    continue
+    for i, it in enumerate(items[:5]):
+        print(f"[SAMPLE] {name} #{i+1}: {it['title'][:120]}")
+
+    for it in items:
+        if it["id"] in seen:
+            continue
 
                 if not matches(it["title"], include, exclude):
                     continue
