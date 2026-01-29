@@ -2,10 +2,9 @@ import json, os, re, time, unicodedata
 import requests
 from bs4 import BeautifulSoup
 
-UA = "Mozilla/5.0 (compatible; WatchAlertBot/1.0)"
+UA = "Mozilla/5.0 (compatible; WatchAlertBot/1.1)"
 HEADERS = {"User-Agent": UA}
 STATE_FILE = "seen.json"
-LOG_WEBHOOK_ENV = "WEBHOOK_OMEGA"  # salon "log" (change si tu veux)
 
 def strip_accents(s: str) -> str:
     if not s:
@@ -30,14 +29,12 @@ def save_json(path, data):
 
 def fetch_html(url: str):
     try:
-        r = requests.get(url, headers=HEADERS, timeout=30)
+        r = requests.get(url, headers=HEADERS, timeout=25)
         if r.status_code in (403, 429):
-            print(f"[BLOCKED] {url} -> {r.status_code}")
             return None
         r.raise_for_status()
         return r.text
-    except requests.RequestException as e:
-        print(f"[ERROR] fetch failed: {url} -> {e}")
+    except:
         return None
 
 def matches(text: str, include, exclude) -> bool:
@@ -48,61 +45,51 @@ def matches(text: str, include, exclude) -> bool:
         return False
     return True
 
-def discord_notify(webhook_env_name: str, content: str):
-    url = os.environ.get(webhook_env_name)
-    if not url:
-        print(f"[NO WEBHOOK {webhook_env_name}] {content}")
-        return
-    r = requests.post(url, json={"content": content}, timeout=15)
-    print("Discord status:", r.status_code, "via", webhook_env_name)
+def discord_notify(webhook_env: str, content: str):
+    url = os.environ.get(webhook_env)
+    if url:
+        requests.post(url, json={"content": content}, timeout=10)
 
 def parse_vinted_listings(html: str):
     soup = BeautifulSoup(html, "lxml")
-    out = {}
+    items = {}
     for a in soup.select("a[href*='/items/']"):
         href = a.get("href")
         if not href:
             continue
-        url = href if href.startswith("http") else ("https://www.vinted.fr" + href)
+        url = href if href.startswith("http") else "https://www.vinted.fr" + href
         title = a.get_text(" ", strip=True) or "Annonce Vinted"
-        out[url] = {"id": url, "title": title, "url": url}
-    return list(out.values())
+        items[url] = {"id": url, "title": title, "url": url}
+    return list(items.values())
+
+def expand_pages(url: str):
+    if "page=" not in url:
+        return [url, url + "&page=2"]
+    return [url.replace("page=1", "page=1"), url.replace("page=1", "page=2")]
 
 def main():
     cfg = load_json("config.json", {})
-    state = load_json(STATE_FILE, {"seen_ids": [], "initialized": False})
+    state = load_json(STATE_FILE, {"seen_ids": []})
     seen = set(state.get("seen_ids", []))
-
-    initialized = state.get("initialized", False)
-    first_run = not initialized
-
     new_seen = set(seen)
-
-    total_pages_read = 0
-    total_items_read = 0
-    total_alerts_sent = 0
 
     for q in cfg.get("queries", []):
         name = q["name"]
-        webhook_env = q.get("webhook_env", LOG_WEBHOOK_ENV)
+        webhook = q["webhook_env"]
         include = q.get("include", [])
         exclude = q.get("exclude", [])
         urls = q.get("vinted_urls", [])
 
-        if not urls:
-            print(f"[SKIP] {name}: no vinted_urls")
-            continue
-
+        all_urls = []
         for u in urls:
+            all_urls.extend(expand_pages(u))
+
+        for u in all_urls:
             html = fetch_html(u)
             if not html:
                 continue
 
             listings = parse_vinted_listings(html)
-            print(f"[{name}] {len(listings)} annonces lues")
-            total_pages_read += 1
-            total_items_read += len(listings)
-
             time.sleep(1)
 
             for it in listings:
@@ -113,22 +100,13 @@ def main():
                 if not matches(it["title"], include, exclude):
                     continue
 
-                if first_run:
-                    continue
+                discord_notify(
+                    webhook,
+                    f"🔔 **{name}**\n{it['title']}\n{it['url']}"
+                )
 
-                total_alerts_sent += 1
-                discord_notify(webhook_env, f"🔔 **{name}**\n{it['title']}\n{it['url']}")
-
-    # Sauvegarde état + verrouillage
-    state["seen_ids"] = list(new_seen)[-8000:]
-    state["initialized"] = True
+    state["seen_ids"] = list(new_seen)[-10000:]
     save_json(STATE_FILE, state)
-
-    # Message de diagnostic dans le salon LOG (1 message par run)
-    if first_run:
-        discord_notify(LOG_WEBHOOK_ENV, f"🧾 Init OK — pages:{total_pages_read} items:{total_items_read} (pas d’alertes au 1er run)")
-    else:
-        discord_notify(LOG_WEBHOOK_ENV, f"🧾 Run OK — pages:{total_pages_read} items:{total_items_read} alertes:{total_alerts_sent}")
 
 if __name__ == "__main__":
     main()
