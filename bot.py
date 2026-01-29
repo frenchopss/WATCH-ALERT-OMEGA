@@ -100,11 +100,16 @@ def main():
         listings = []
 
         if urls.get("vinted"):
-            listings += parse_vinted_listings(fetch_html(urls["vinted"]))
+            html = fetch_html(urls["vinted"])
+if html:
+    listings += parse_vinted_listings(html)
+
             time.sleep(1)
 
         if urls.get("leboncoin"):
-            listings += parse_leboncoin_listings(fetch_html(urls["leboncoin"]))
+            html = fetch_html(urls["leboncoin"])
+if html:
+    listings += parse_leboncoin_listings(html)
             time.sleep(1)
 
         for it in listings:
