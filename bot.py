@@ -2,19 +2,22 @@ import json, os, re, time, unicodedata
 import requests
 from bs4 import BeautifulSoup
 
-UA = "Mozilla/5.0 (compatible; WatchAlertBot/1.3)"
+UA = "Mozilla/5.0 (compatible; WatchAlertBot/1.0)"
 HEADERS = {"User-Agent": UA}
 STATE_FILE = "seen.json"
 
+
+# ------------------ utils ------------------
+
 def strip_accents(s: str) -> str:
-    if not s:
-        return ""
-    return "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
+    return "".join(
+        c for c in unicodedata.normalize("NFKD", s or "")
+        if not unicodedata.combining(c)
+    )
 
 def norm(s: str) -> str:
     s = strip_accents(s).lower().strip()
-    s = re.sub(r"\s+", " ", s)
-    return s
+    return re.sub(r"\s+", " ", s)
 
 def load_json(path, default):
     try:
@@ -29,111 +32,116 @@ def save_json(path, data):
 
 def fetch_html(url: str):
     try:
-        r = requests.get(url, headers=HEADERS, timeout=25)
+        r = requests.get(url, headers=HEADERS, timeout=30)
         if r.status_code in (403, 429):
-            print(f"[BLOCKED] {r.status_code} {url}")
+            print(f"[BLOCKED] {url}")
             return None
         r.raise_for_status()
         return r.text
     except Exception as e:
-        print(f"[ERROR] fetch {url} -> {e}")
+        print("[FETCH ERROR]", e)
         return None
+
+
+# ------------------ matching ------------------
 
 def matches(title: str, include, exclude) -> bool:
     t = norm(title)
 
-    # Exclusion stricte
     if exclude and any(norm(x) in t for x in exclude):
         return False
 
-    # Inclusion souple : AU MOINS 1 mot-clé suffit
     if include:
         return any(norm(x) in t for x in include)
-        
+
     return True
-    
+
+
+# ------------------ discord ------------------
+
 def discord_notify(webhook_env: str, content: str):
     url = os.environ.get(webhook_env)
     if not url:
-        print(f"[NO_WEBHOOK_ENV] {webhook_env} missing -> not sent")
+        print("[NO WEBHOOK]", webhook_env)
         return
-    try:
-        resp = requests.post(url, json={"content": content}, timeout=10)
-        print(f"[DISCORD] {webhook_env} status={resp.status_code}")
-    except Exception as e:
-        print(f"[ERROR] discord post -> {e}")
+    requests.post(url, json={"content": content}, timeout=15)
+
+
+# ------------------ vinted parsing ------------------
 
 def parse_vinted_listings(html: str):
     soup = BeautifulSoup(html, "lxml")
-    out = {}
+    listings = []
+
     for a in soup.select("a[href*='/items/']"):
         href = a.get("href")
         if not href:
             continue
-        url = href if href.startswith("http") else "https://www.vinted.fr" + href
-        title = a.get_text(" ", strip=True) or "Annonce Vinted"
-        out[url] = {"id": url, "title": title, "url": url}
-    return list(out.values())
 
-def expand_pages(url: str):
-    # on surveille toujours page 1 + 2
-    if "page=" not in url:
-        return [url, url + "&page=2"]
-    if "page=1" in url:
-        return [url, url.replace("page=1", "page=2")]
-    # si page != 1, on ajoute quand même une variante page=2
-    return [url, re.sub(r"page=\d+", "page=2", url)]
+        url = href if href.startswith("http") else "https://www.vinted.fr" + href
+        title = a.get_text(" ", strip=True)
+
+        listings.append({
+            "id": url,
+            "title": title or "Annonce Vinted",
+            "url": url
+        })
+
+    return listings
+
+
+# ------------------ main ------------------
 
 def main():
     cfg = load_json("config.json", {})
     state = load_json(STATE_FILE, {"seen_ids": []})
+
     seen = set(state.get("seen_ids", []))
     new_seen = set(seen)
 
-    queries = cfg.get("queries", [])
-    print(f"[START] queries={len(queries)} seen_ids={len(seen)}")
+    alerts = 0
 
-    total_alerts = 0
-
-    for q in queries:
+    for q in cfg.get("queries", []):
         name = q["name"]
-        webhook_env = q["webhook_env"]
         include = q.get("include", [])
         exclude = q.get("exclude", [])
         urls = q.get("vinted_urls", [])
+        webhook_env = q["webhook_env"]
 
-        env_present = bool(os.environ.get(webhook_env))
-        print(f"[QUERY] {name} webhook_env={webhook_env} env_present={env_present} urls={len(urls)}")
+        print(f"[QUERY] {name} urls={len(urls)}")
 
-        all_urls = []
         for u in urls:
-            all_urls.extend(expand_pages(u))
-
-        for u in all_urls:
             html = fetch_html(u)
             if not html:
                 continue
 
-            listings = parse_vinted_listings(html)
-            print(f"[READ] {name} -> {len(listings)} items | {u}")
-            time.sleep(1)
+            items = parse_vinted_listings(html)
+            print(f"[READ] {name} -> {len(items)} items")
 
-            for it in listings:
-                if it["id"] in new_seen:
+            for it in items:
+                if it["id"] in seen:
                     continue
-                new_seen.add(it["id"])
 
                 if not matches(it["title"], include, exclude):
                     continue
 
-                # ✅ Nouvelle annonce qui match
-                total_alerts += 1
-                print(f"[ALERT] {name} -> {it['url']}")
-                discord_notify(webhook_env, f"🔔 **{name}**\n{it['title']}\n{it['url']}")
+                # ✅ SEULEMENT ICI on considère l’annonce comme vue
+                new_seen.add(it["id"])
+                alerts += 1
 
-    state["seen_ids"] = list(new_seen)[-10000:]
+                print("[ALERT]", it["url"])
+                discord_notify(
+                    webhook_env,
+                    f"🔔 **{name}**\n{it['title']}\n{it['url']}"
+                )
+
+            time.sleep(1)
+
+    state["seen_ids"] = list(new_seen)[-8000:]
     save_json(STATE_FILE, state)
-    print(f"[END] alerts={total_alerts} seen_ids={len(state['seen_ids'])}")
+
+    print(f"[END] alerts={alerts} seen_ids={len(state['seen_ids'])}")
+
 
 if __name__ == "__main__":
     main()
