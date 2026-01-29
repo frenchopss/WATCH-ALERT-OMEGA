@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 UA = "Mozilla/5.0 (compatible; WatchAlertBot/1.0)"
 HEADERS = {"User-Agent": UA}
 STATE_FILE = "seen.json"
+LOG_WEBHOOK_ENV = "WEBHOOK_OMEGA"  # salon "log" (change si tu veux)
 
 def strip_accents(s: str) -> str:
     if not s:
@@ -77,9 +78,13 @@ def main():
 
     new_seen = set(seen)
 
+    total_pages_read = 0
+    total_items_read = 0
+    total_alerts_sent = 0
+
     for q in cfg.get("queries", []):
         name = q["name"]
-        webhook_env = q.get("webhook_env", "WEBHOOK_OMEGA")
+        webhook_env = q.get("webhook_env", LOG_WEBHOOK_ENV)
         include = q.get("include", [])
         exclude = q.get("exclude", [])
         urls = q.get("vinted_urls", [])
@@ -88,14 +93,16 @@ def main():
             print(f"[SKIP] {name}: no vinted_urls")
             continue
 
-        new_hits = 0
-
         for u in urls:
             html = fetch_html(u)
             if not html:
                 continue
 
             listings = parse_vinted_listings(html)
+            print(f"[{name}] {len(listings)} annonces lues")
+            total_pages_read += 1
+            total_items_read += len(listings)
+
             time.sleep(1)
 
             for it in listings:
@@ -109,13 +116,19 @@ def main():
                 if first_run:
                     continue
 
-                new_hits += 1
+                total_alerts_sent += 1
                 discord_notify(webhook_env, f"🔔 **{name}**\n{it['title']}\n{it['url']}")
 
-       # Sauvegarde état + verrouillage de l'initialisation
+    # Sauvegarde état + verrouillage
     state["seen_ids"] = list(new_seen)[-8000:]
     state["initialized"] = True
     save_json(STATE_FILE, state)
+
+    # Message de diagnostic dans le salon LOG (1 message par run)
+    if first_run:
+        discord_notify(LOG_WEBHOOK_ENV, f"🧾 Init OK — pages:{total_pages_read} items:{total_items_read} (pas d’alertes au 1er run)")
+    else:
+        discord_notify(LOG_WEBHOOK_ENV, f"🧾 Run OK — pages:{total_pages_read} items:{total_items_read} alertes:{total_alerts_sent}")
 
 if __name__ == "__main__":
     main()
