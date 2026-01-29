@@ -41,12 +41,17 @@ def fetch_html(url: str):
 
 def matches(title: str, include, exclude) -> bool:
     t = norm(title)
+
+    # Exclusion stricte
     if exclude and any(norm(x) in t for x in exclude):
         return False
-    if include and not any(norm(x) in t for x in include):
-        return False
-    return True
 
+    # Inclusion souple : AU MOINS 1 mot-clé suffit
+    if include:
+        return any(norm(x) in t for x in include)
+        
+    return True
+    
 def discord_notify(webhook_env: str, content: str):
     url = os.environ.get(webhook_env)
     if not url:
