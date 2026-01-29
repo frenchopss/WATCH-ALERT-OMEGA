@@ -47,12 +47,13 @@ def matches(text: str, include, exclude) -> bool:
         return False
     return True
 
-def discord_notify(webhook_url: str, content: str):
-    if not webhook_url:
-        print("[NO WEBHOOK]", content)
+def discord_notify(webhook_env_name: str, content: str):
+    url = os.environ.get(webhook_env_name)
+    if not url:
+        print(f"[NO WEBHOOK {webhook_env_name}] {content}")
         return
-    r = requests.post(webhook_url, json={"content": content}, timeout=15)
-    print("Discord status:", r.status_code)
+    r = requests.post(url, json={"content": content}, timeout=15)
+    print("Discord status:", r.status_code, "via", webhook_env_name)
 
 def parse_vinted_listings(html: str):
     soup = BeautifulSoup(html, "lxml")
@@ -67,53 +68,56 @@ def parse_vinted_listings(html: str):
     return list(out.values())
 
 def main():
-    webhook = os.environ.get("DISCORD_WEBHOOK_URL")
     cfg = load_json("config.json", {})
     state = load_json(STATE_FILE, {"seen_ids": []})
     seen = set(state.get("seen_ids", []))
 
     first_run = (len(seen) == 0)
-    new_hits = 0
     new_seen = set(seen)
 
     for q in cfg.get("queries", []):
         name = q["name"]
+        webhook_env = q.get("webhook_env", "WEBHOOK_OMEGA")
         include = q.get("include", [])
         exclude = q.get("exclude", [])
-        vinted_url = (q.get("search_urls", {}) or {}).get("vinted")
+        urls = q.get("vinted_urls", [])
 
-        if not vinted_url:
-            print(f"[SKIP] {name}: missing vinted url")
+        if not urls:
+            print(f"[SKIP] {name}: no vinted_urls")
             continue
 
-        html = fetch_html(vinted_url)
-        if not html:
-            continue
+        new_hits = 0
 
-        listings = parse_vinted_listings(html)
-        time.sleep(1)
-
-        for it in listings:
-            if it["id"] in new_seen:
-                continue
-            new_seen.add(it["id"])
-
-            if not matches(it["title"], include, exclude):
+        for u in urls:
+            html = fetch_html(u)
+            if not html:
                 continue
 
-            if first_run:
-                continue
+            listings = parse_vinted_listings(html)
+            time.sleep(1)
 
-            new_hits += 1
-            discord_notify(webhook, f"🔔 **{name}**\n{it['title']}\n{it['url']}")
+            for it in listings:
+                if it["id"] in new_seen:
+                    continue
+                new_seen.add(it["id"])
 
-    state["seen_ids"] = list(new_seen)[-6000:]
+                if not matches(it["title"], include, exclude):
+                    continue
+
+                if first_run:
+                    continue
+
+                new_hits += 1
+                discord_notify(webhook_env, f"🔔 **{name}**\n{it['title']}\n{it['url']}")
+
+        # petit message de fin par salon (utile pour confirmer que ça tourne)
+        if first_run:
+            discord_notify(webhook_env, "✅ V1 (Vinted-only) initialisée : historique chargé (pas d’alertes au 1er run).")
+        else:
+            discord_notify(webhook_env, f"✅ V1 (Vinted-only) run terminé : {new_hits} nouvelle(s) alerte(s).")
+
+    state["seen_ids"] = list(new_seen)[-8000:]
     save_json(STATE_FILE, state)
-
-    if first_run:
-        discord_notify(webhook, "✅ V1 (Vinted-only) initialisée : historique chargé (pas d’alertes au 1er run).")
-    else:
-        discord_notify(webhook, f"✅ V1 (Vinted-only) run terminé : {new_hits} nouvelle(s) alerte(s).")
 
 if __name__ == "__main__":
     main()
