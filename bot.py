@@ -9,10 +9,7 @@ STATE_FILE = "seen.json"
 def strip_accents(s: str) -> str:
     if not s:
         return ""
-    return "".join(
-        c for c in unicodedata.normalize("NFKD", s)
-        if not unicodedata.combining(c)
-    )
+    return "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
 
 def norm(s: str) -> str:
     s = strip_accents(s).lower().strip()
@@ -30,7 +27,7 @@ def save_json(path, data):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-def fetch_html(url: str) -> str | None:
+def fetch_html(url: str):
     try:
         r = requests.get(url, headers=HEADERS, timeout=30)
         if r.status_code in (403, 429):
@@ -69,18 +66,6 @@ def parse_vinted_listings(html: str):
         out[url] = {"id": url, "title": title, "url": url}
     return list(out.values())
 
-def parse_leboncoin_listings(html: str):
-    soup = BeautifulSoup(html, "lxml")
-    out = {}
-    for a in soup.select("a[href*='/ad/']"):
-        href = a.get("href")
-        if not href:
-            continue
-        url = href if href.startswith("http") else ("https://www.leboncoin.fr" + href)
-        title = a.get_text(" ", strip=True) or "Annonce Leboncoin"
-        out[url] = {"id": url, "title": title, "url": url}
-    return list(out.values())
-
 def main():
     webhook = os.environ.get("DISCORD_WEBHOOK_URL")
     cfg = load_json("config.json", {})
@@ -95,22 +80,18 @@ def main():
         name = q["name"]
         include = q.get("include", [])
         exclude = q.get("exclude", [])
-        urls = q.get("search_urls", {})
+        vinted_url = (q.get("search_urls", {}) or {}).get("vinted")
 
-        listings = []
+        if not vinted_url:
+            print(f"[SKIP] {name}: missing vinted url")
+            continue
 
-        if urls.get("vinted"):
-            html = fetch_html(urls["vinted"])
-if html:
-    listings += parse_vinted_listings(html)
+        html = fetch_html(vinted_url)
+        if not html:
+            continue
 
-            time.sleep(1)
-
-        if urls.get("leboncoin"):
-            html = fetch_html(urls["leboncoin"])
-if html:
-    listings += parse_leboncoin_listings(html)
-            time.sleep(1)
+        listings = parse_vinted_listings(html)
+        time.sleep(1)
 
         for it in listings:
             if it["id"] in new_seen:
@@ -130,9 +111,9 @@ if html:
     save_json(STATE_FILE, state)
 
     if first_run:
-        discord_notify(webhook, "✅ V1 initialisée : historique chargé (pas d’alertes au 1er run).")
+        discord_notify(webhook, "✅ V1 (Vinted-only) initialisée : historique chargé (pas d’alertes au 1er run).")
     else:
-        discord_notify(webhook, f"✅ V1 run terminé : {new_hits} nouvelle(s) alerte(s).")
+        discord_notify(webhook, f"✅ V1 (Vinted-only) run terminé : {new_hits} nouvelle(s) alerte(s).")
 
 if __name__ == "__main__":
     main()
