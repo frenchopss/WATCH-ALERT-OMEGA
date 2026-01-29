@@ -1,4 +1,4 @@
-name: Watch Alerts V1
+name: Watch Alerts V1 (Vinted)
 
 on:
   schedule:
@@ -10,12 +10,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - name: Download state artifact (if exists)
+        uses: actions/download-artifact@v4
+        with:
+          name: watch-alert-state
+          path: .
+        continue-on-error: true
+
       - name: Install deps
         run: pip install -r requirements.txt
+
       - name: Run bot
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          WEBHOOK_OMEGA: ${{ secrets.WEBHOOK_OMEGA }}
+          WEBHOOK_TISSOT: ${{ secrets.WEBHOOK_TISSOT }}
+          WEBHOOK_LONGINES: ${{ secrets.WEBHOOK_LONGINES }}
+          WEBHOOK_MIDO: ${{ secrets.WEBHOOK_MIDO }}
+          WEBHOOK_FC: ${{ secrets.WEBHOOK_FC }}
         run: python bot.py
+
+      - name: Upload state artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: watch-alert-state
+          path: seen.json
+          if-no-files-found: error
+          retention-days: 7
