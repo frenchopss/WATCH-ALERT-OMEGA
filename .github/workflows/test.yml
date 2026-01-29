@@ -15,7 +15,6 @@ jobs:
         with:
           python-version: "3.11"
 
-      # ✅ RESTORE seen.json depuis le cache (persiste entre runs)
       - name: Restore seen.json cache
         uses: actions/cache@v4
         with:
