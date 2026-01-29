@@ -30,10 +30,17 @@ def save_json(path, data):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-def fetch_html(url: str) -> str:
-    r = requests.get(url, headers=HEADERS, timeout=30)
-    r.raise_for_status()
-    return r.text
+def fetch_html(url: str) -> str | None:
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=30)
+        if r.status_code in (403, 429):
+            print(f"[BLOCKED] {url} -> {r.status_code}")
+            return None
+        r.raise_for_status()
+        return r.text
+    except requests.RequestException as e:
+        print(f"[ERROR] fetch failed: {url} -> {e}")
+        return None
 
 def matches(text: str, include, exclude) -> bool:
     t = norm(text)
