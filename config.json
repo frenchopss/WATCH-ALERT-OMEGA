@@ -1,0 +1,14 @@
+{
+  "interval_minutes": 15,
+  "queries": [
+    {
+      "name": "Omega Seamaster (100-450)",
+      "include": ["omega", "seamaster"],
+      "exclude": ["réplique", "replica", "fake"],
+      "search_urls": {
+        "vinted": "https://www.vinted.fr/catalog?search_id=30753708572&search_text=Oméga%20Seamaster%20&search_by_image_uuid=&catalog[]=97&page=1&time=1769687718&price_from=100&currency=EUR&price_to=450&brand_ids[]=194842",
+        "leboncoin": "https://www.leboncoin.fr/recherche?category=42&text=Oméga+seamaster&shippable=1&price=100-450&watches_jewels_type=monteautomatique%2Cmontremecanique%2Cmontrequartz&watches_jewels_brand=omega&item_condition=1%2C2%2C3"
+      }
+    }
+  ]
+}
