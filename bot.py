@@ -2,9 +2,13 @@ import json, os, re, time, unicodedata
 import requests
 from bs4 import BeautifulSoup
 
-UA = "Mozilla/5.0 (compatible; WatchAlertBot/1.2)"
+UA = "Mozilla/5.0 (compatible; WatchAlertBot/1.3)"
 HEADERS = {"User-Agent": UA}
 STATE_FILE = "seen.json"
+
+# ✅ Limite anti-spam / anti-429 Discord
+MAX_ALERTS_PER_RUN = 30          # ajuste (10–50)
+DISCORD_SLEEP_SECONDS = 1.2      # throttle safe pour webhook
 
 
 # ------------------ utils ------------------
@@ -64,9 +68,14 @@ def discord_notify(webhook_env: str, content: str):
     if not url:
         print("[NO WEBHOOK]", webhook_env)
         return
+
     try:
         resp = requests.post(url, json={"content": content}, timeout=15)
         print(f"[DISCORD] {webhook_env} status={resp.status_code}")
+
+        # ✅ throttle anti-429
+        time.sleep(DISCORD_SLEEP_SECONDS)
+
     except Exception as e:
         print("[DISCORD ERROR]", e)
 
@@ -84,13 +93,13 @@ def parse_vinted_listings(html: str):
 
         url = href if href.startswith("http") else "https://www.vinted.fr" + href
 
-        # ✅ ID stable (évite les doublons même si l'URL change)
+        # ✅ ID stable (évite doublons même si URL change)
         m = re.search(r"/items/(\d+)", url)
         if not m:
             continue
         item_id = m.group(1)
 
-        # ✅ titre plus robuste que get_text seul
+        # ✅ titre plus robuste
         title = (
             a.get("title")
             or a.get("aria-label")
@@ -99,7 +108,7 @@ def parse_vinted_listings(html: str):
         )
 
         listings.append({
-            "id": item_id,   # on stocke l'ID numérique, pas l'URL
+            "id": item_id,
             "title": title,
             "url": url
         })
@@ -135,18 +144,18 @@ def main():
             items = parse_vinted_listings(html)
             print(f"[READ] {name} -> {len(items)} items")
 
-            # DEBUG léger : affiche 3 titres max
-            for i, it in enumerate(items[:3]):
-                print(f"[SAMPLE] {name} #{i+1}: {it['title'][:120]} (id={it['id']})")
-
             for it in items:
+                if alerts >= MAX_ALERTS_PER_RUN:
+                    print("[STOP] max alerts per run reached")
+                    break
+
                 if it["id"] in seen:
                     continue
 
                 if not matches(it["title"], include, exclude):
                     continue
 
-                # ✅ On marque "vu" uniquement si ça déclenche une alerte
+                # ✅ vu uniquement si alerte envoyée
                 new_seen.add(it["id"])
                 alerts += 1
 
@@ -156,6 +165,9 @@ def main():
                 )
 
             time.sleep(1)
+
+        if alerts >= MAX_ALERTS_PER_RUN:
+            break
 
     state["seen_ids"] = list(new_seen)[-12000:]
     save_json(STATE_FILE, state)
