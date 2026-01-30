@@ -19,7 +19,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: seen.json
-          key: watch-alert-seen-v1
+          key: watch-alert-seen-v1-${{ github.run_id }}
+          restore-keys: |
+            watch-alert-seen-v1-
 
       - name: Install deps
         run: pip install -r requirements.txt
