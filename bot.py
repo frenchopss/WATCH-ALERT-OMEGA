@@ -2,13 +2,14 @@ import json, os, re, time, unicodedata
 import requests
 from bs4 import BeautifulSoup
 
-UA = "Mozilla/5.0 (compatible; WatchAlertBot/1.3)"
+UA = "Mozilla/5.0 (compatible; WatchAlertBot/1.4)"
 HEADERS = {"User-Agent": UA}
 STATE_FILE = "seen.json"
 
-# ✅ Limite anti-spam / anti-429 Discord
-MAX_ALERTS_PER_RUN = 30          # ajuste (10–50)
-DISCORD_SLEEP_SECONDS = 1.2      # throttle safe pour webhook
+# ✅ Anti-spam / anti-429
+MAX_ALERTS_TOTAL_PER_RUN = 30     # plafond global (tous salons confondus)
+MAX_ALERTS_PER_QUERY = 8          # plafond par salon (par query)
+DISCORD_SLEEP_SECONDS = 1.2       # throttle safe webhook
 
 
 # ------------------ utils ------------------
@@ -72,10 +73,7 @@ def discord_notify(webhook_env: str, content: str):
     try:
         resp = requests.post(url, json={"content": content}, timeout=15)
         print(f"[DISCORD] {webhook_env} status={resp.status_code}")
-
-        # ✅ throttle anti-429
         time.sleep(DISCORD_SLEEP_SECONDS)
-
     except Exception as e:
         print("[DISCORD ERROR]", e)
 
@@ -93,13 +91,11 @@ def parse_vinted_listings(html: str):
 
         url = href if href.startswith("http") else "https://www.vinted.fr" + href
 
-        # ✅ ID stable (évite doublons même si URL change)
         m = re.search(r"/items/(\d+)", url)
         if not m:
             continue
         item_id = m.group(1)
 
-        # ✅ titre plus robuste
         title = (
             a.get("title")
             or a.get("aria-label")
@@ -107,11 +103,7 @@ def parse_vinted_listings(html: str):
             or "Annonce Vinted"
         )
 
-        listings.append({
-            "id": item_id,
-            "title": title,
-            "url": url
-        })
+        listings.append({"id": item_id, "title": title, "url": url})
 
     return listings
 
@@ -125,7 +117,7 @@ def main():
     seen = set(state.get("seen_ids", []))
     new_seen = set(seen)
 
-    alerts = 0
+    total_alerts = 0
 
     for q in cfg.get("queries", []):
         name = q["name"]
@@ -134,9 +126,14 @@ def main():
         urls = q.get("vinted_urls", [])
         webhook_env = q["webhook_env"]
 
-        print(f"[QUERY] {name} urls={len(urls)} webhook_env={webhook_env} env_present={bool(os.environ.get(webhook_env))}")
+        query_alerts = 0
+        print(f"[QUERY] {name} urls={len(urls)} webhook_env={webhook_env}")
 
         for u in urls:
+            if total_alerts >= MAX_ALERTS_TOTAL_PER_RUN:
+                print("[STOP] max TOTAL alerts reached")
+                break
+
             html = fetch_html(u)
             if not html:
                 continue
@@ -145,8 +142,12 @@ def main():
             print(f"[READ] {name} -> {len(items)} items")
 
             for it in items:
-                if alerts >= MAX_ALERTS_PER_RUN:
-                    print("[STOP] max alerts per run reached")
+                if total_alerts >= MAX_ALERTS_TOTAL_PER_RUN:
+                    print("[STOP] max TOTAL alerts reached")
+                    break
+
+                if query_alerts >= MAX_ALERTS_PER_QUERY:
+                    # ✅ on passe au salon suivant sans bloquer les autres
                     break
 
                 if it["id"] in seen:
@@ -155,9 +156,9 @@ def main():
                 if not matches(it["title"], include, exclude):
                     continue
 
-                # ✅ vu uniquement si alerte envoyée
                 new_seen.add(it["id"])
-                alerts += 1
+                total_alerts += 1
+                query_alerts += 1
 
                 discord_notify(
                     webhook_env,
@@ -166,13 +167,15 @@ def main():
 
             time.sleep(1)
 
-        if alerts >= MAX_ALERTS_PER_RUN:
+        print(f"[QUERY END] {name} alerts={query_alerts}")
+
+        if total_alerts >= MAX_ALERTS_TOTAL_PER_RUN:
             break
 
     state["seen_ids"] = list(new_seen)[-12000:]
     save_json(STATE_FILE, state)
 
-    print(f"[END] alerts={alerts} seen_ids={len(state['seen_ids'])}")
+    print(f"[END] alerts={total_alerts} seen_ids={len(state['seen_ids'])}")
 
 
 if __name__ == "__main__":
