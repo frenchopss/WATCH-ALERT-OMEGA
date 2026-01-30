@@ -2,7 +2,7 @@ import json, os, re, time, unicodedata
 import requests
 from bs4 import BeautifulSoup
 
-UA = "Mozilla/5.0 (compatible; WatchAlertBot/1.0)"
+UA = "Mozilla/5.0 (compatible; WatchAlertBot/1.2)"
 HEADERS = {"User-Agent": UA}
 STATE_FILE = "seen.json"
 
@@ -84,7 +84,13 @@ def parse_vinted_listings(html: str):
 
         url = href if href.startswith("http") else "https://www.vinted.fr" + href
 
-        # plus robuste que get_text seul
+        # ✅ ID stable (évite les doublons même si l'URL change)
+        m = re.search(r"/items/(\d+)", url)
+        if not m:
+            continue
+        item_id = m.group(1)
+
+        # ✅ titre plus robuste que get_text seul
         title = (
             a.get("title")
             or a.get("aria-label")
@@ -93,7 +99,7 @@ def parse_vinted_listings(html: str):
         )
 
         listings.append({
-            "id": url,
+            "id": item_id,   # on stocke l'ID numérique, pas l'URL
             "title": title,
             "url": url
         })
@@ -119,7 +125,7 @@ def main():
         urls = q.get("vinted_urls", [])
         webhook_env = q["webhook_env"]
 
-        print(f"[QUERY] {name} urls={len(urls)}")
+        print(f"[QUERY] {name} urls={len(urls)} webhook_env={webhook_env} env_present={bool(os.environ.get(webhook_env))}")
 
         for u in urls:
             html = fetch_html(u)
@@ -129,8 +135,9 @@ def main():
             items = parse_vinted_listings(html)
             print(f"[READ] {name} -> {len(items)} items")
 
-            for i, it in enumerate(items[:5]):
-                print(f"[SAMPLE] {name} #{i+1}: {it['title'][:120]}")
+            # DEBUG léger : affiche 3 titres max
+            for i, it in enumerate(items[:3]):
+                print(f"[SAMPLE] {name} #{i+1}: {it['title'][:120]} (id={it['id']})")
 
             for it in items:
                 if it["id"] in seen:
@@ -139,11 +146,10 @@ def main():
                 if not matches(it["title"], include, exclude):
                     continue
 
-                # ✅ on marque "vu" uniquement si ça déclenche une alerte
+                # ✅ On marque "vu" uniquement si ça déclenche une alerte
                 new_seen.add(it["id"])
                 alerts += 1
 
-                print("[ALERT]", it["url"])
                 discord_notify(
                     webhook_env,
                     f"🔔 **{name}**\n{it['title']}\n{it['url']}"
@@ -151,7 +157,7 @@ def main():
 
             time.sleep(1)
 
-    state["seen_ids"] = list(new_seen)[-8000:]
+    state["seen_ids"] = list(new_seen)[-12000:]
     save_json(STATE_FILE, state)
 
     print(f"[END] alerts={alerts} seen_ids={len(state['seen_ids'])}")
