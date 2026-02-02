@@ -5,8 +5,13 @@ on:
     - cron: "*/15 * * * *"
   workflow_dispatch:
 
+concurrency:
+  group: watch-alerts-v1
+  cancel-in-progress: true
+
 jobs:
   run-bot:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
 
     steps:
@@ -37,7 +42,7 @@ jobs:
           WEBHOOK_FC: ${{ secrets.WEBHOOK_FC }}
         run: python bot.py
 
-      # Save cache (après run)
+      # Save cache (même clé stable)
       - name: Save seen.json cache
         uses: actions/cache/save@v4
         with:
