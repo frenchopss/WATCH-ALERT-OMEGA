@@ -2,17 +2,51 @@ import json, os, re, time, unicodedata
 import requests
 from bs4 import BeautifulSoup
 
-UA = "Mozilla/5.0 (compatible; WatchAlertBot/1.4)"
+UA = "Mozilla/5.0 (compatible; WatchAlertBot/2.0)"
 HEADERS = {"User-Agent": UA}
 STATE_FILE = "seen.json"
 
-# ✅ Anti-spam / anti-429
-MAX_ALERTS_TOTAL_PER_RUN = 30     # plafond global (tous salons confondus)
-MAX_ALERTS_PER_QUERY = 8          # plafond par salon (par query)
-DISCORD_SLEEP_SECONDS = 1.2       # throttle safe webhook
+# --- limites / anti-spam ---
+MAX_ALERTS_TOTAL_PER_RUN = 30
+MAX_ALERTS_PER_QUERY = 8
 
+DISCORD_SLEEP_SECONDS = 1.2     # anti-429
+ITEM_PAGE_SLEEP_SECONDS = 0.7   # requête page item pour image (og:image)
 
-# ------------------ utils ------------------
+# --- anti-bruit (hard excludes titre) ---
+HARD_EXCLUDE_TITLE = [
+    "bracelet", "bracelet montre", "watch band", "strap",
+    "boucle", "buckle",
+    "maillon", "maillons", "link", "links",
+    "pour pièces", "pieces detachees", "pièces détachées", "spares", "parts",
+    "mouvement seul", "movement only",
+    "cadran", "dial only",
+    "boîte seule", "boite seule", "box only",
+    "outil", "tool", "watchmaker"
+]
+
+# --- scoring (simple, robuste, V2) ---
+POSITIVE = [
+    ("révisée", 20, "REV"),
+    ("revision", 20, "REV"),
+    ("serviced", 20, "REV"),
+    ("automatique", 12, "AUTO"),
+    ("mecanique", 12, "MECA"),
+    ("mécanique", 12, "MECA"),
+    ("vintage", 6, "VIN"),
+    ("très bon état", 8, "TBE"),
+    ("bon état", 4, "BE"),
+]
+
+NEGATIVE = [
+    ("quartz", -8, "QZ"),
+    ("pile", -6, "PILE"),
+    ("ne fonctionne pas", -40, "HS"),
+    ("hs", -40, "HS"),
+    ("pour pièces", -60, "PARTS"),
+    ("pieces detachees", -60, "PARTS"),
+    ("pièces détachées", -60, "PARTS"),
+]
 
 def strip_accents(s: str) -> str:
     return "".join(
@@ -47,8 +81,9 @@ def fetch_html(url: str):
         print("[FETCH ERROR]", e)
         return None
 
-
-# ------------------ matching ------------------
+def title_is_hard_excluded(title: str) -> bool:
+    t = norm(title)
+    return any(norm(x) in t for x in HARD_EXCLUDE_TITLE)
 
 def matches(title: str, include, exclude) -> bool:
     t = norm(title)
@@ -61,24 +96,63 @@ def matches(title: str, include, exclude) -> bool:
 
     return True
 
+def score_title(title: str) -> tuple[int, list[str]]:
+    t = norm(title)
+    score = 50
+    tags = []
 
-# ------------------ discord ------------------
+    for key, pts, tag in POSITIVE:
+        if norm(key) in t:
+            score += pts
+            tags.append(tag)
 
-def discord_notify(webhook_env: str, content: str):
-    url = os.environ.get(webhook_env)
-    if not url:
+    for key, pts, tag in NEGATIVE:
+        if norm(key) in t:
+            score += pts
+            tags.append(tag)
+
+    score = max(0, min(100, score))
+    return score, sorted(set(tags))
+
+def get_vinted_og_image(item_url: str) -> str | None:
+    html = fetch_html(item_url)
+    if not html:
+        return None
+    soup = BeautifulSoup(html, "lxml")
+    meta = soup.select_one("meta[property='og:image']")
+    if meta and meta.get("content"):
+        return meta["content"]
+    return None
+
+def discord_notify_embed(webhook_env: str, title: str, url: str, score: int, tags: list[str], image_url: str | None):
+    webhook = os.environ.get(webhook_env)
+    if not webhook:
         print("[NO WEBHOOK]", webhook_env)
         return
 
+    color = 0x2ECC71 if score >= 70 else (0xF1C40F if score >= 50 else 0xE74C3C)
+    tag_str = " ".join(f"`{t}`" for t in tags) if tags else "`—`"
+
+    embed = {
+        "title": f"{title[:180]}",
+        "url": url,
+        "description": f"Score: **{score}/100**  •  Tags: {tag_str}",
+        "color": color,
+    }
+    if image_url:
+        embed["image"] = {"url": image_url}
+
+    payload = {
+        "content": None,
+        "embeds": [embed],
+    }
+
     try:
-        resp = requests.post(url, json={"content": content}, timeout=15)
+        resp = requests.post(webhook, json=payload, timeout=15)
         print(f"[DISCORD] {webhook_env} status={resp.status_code}")
         time.sleep(DISCORD_SLEEP_SECONDS)
     except Exception as e:
         print("[DISCORD ERROR]", e)
-
-
-# ------------------ vinted parsing ------------------
 
 def parse_vinted_listings(html: str):
     soup = BeautifulSoup(html, "lxml")
@@ -107,9 +181,6 @@ def parse_vinted_listings(html: str):
 
     return listings
 
-
-# ------------------ main ------------------
-
 def main():
     cfg = load_json("config.json", {})
     state = load_json(STATE_FILE, {"seen_ids": []})
@@ -127,7 +198,7 @@ def main():
         webhook_env = q["webhook_env"]
 
         query_alerts = 0
-        print(f"[QUERY] {name} urls={len(urls)} webhook_env={webhook_env}")
+        print(f"[QUERY] {name} urls={len(urls)}")
 
         for u in urls:
             if total_alerts >= MAX_ALERTS_TOTAL_PER_RUN:
@@ -143,26 +214,36 @@ def main():
 
             for it in items:
                 if total_alerts >= MAX_ALERTS_TOTAL_PER_RUN:
-                    print("[STOP] max TOTAL alerts reached")
                     break
-
                 if query_alerts >= MAX_ALERTS_PER_QUERY:
-                    # ✅ on passe au salon suivant sans bloquer les autres
                     break
-
                 if it["id"] in seen:
+                    continue
+
+                # anti-bruit hard (titre)
+                if title_is_hard_excluded(it["title"]):
                     continue
 
                 if not matches(it["title"], include, exclude):
                     continue
 
+                score, tags = score_title(it["title"])
+
+                # récup image seulement pour une alerte validée
+                image_url = get_vinted_og_image(it["url"])
+                time.sleep(ITEM_PAGE_SLEEP_SECONDS)
+
                 new_seen.add(it["id"])
                 total_alerts += 1
                 query_alerts += 1
 
-                discord_notify(
-                    webhook_env,
-                    f"🔔 **{name}**\n{it['title']}\n{it['url']}"
+                discord_notify_embed(
+                    webhook_env=webhook_env,
+                    title=f"🔔 {name}",
+                    url=it["url"],
+                    score=score,
+                    tags=tags,
+                    image_url=image_url
                 )
 
             time.sleep(1)
@@ -176,7 +257,6 @@ def main():
     save_json(STATE_FILE, state)
 
     print(f"[END] alerts={total_alerts} seen_ids={len(state['seen_ids'])}")
-
 
 if __name__ == "__main__":
     main()
