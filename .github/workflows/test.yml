@@ -6,24 +6,18 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: watch-alerts-v1
+  group: watch-alert-v1
   cancel-in-progress: true
 
 jobs:
   run-bot:
-    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # Restore cache (clé stable)
       - name: Restore seen.json cache
         uses: actions/cache/restore@v4
         with:
@@ -42,7 +36,6 @@ jobs:
           WEBHOOK_FC: ${{ secrets.WEBHOOK_FC }}
         run: python bot.py
 
-      # Save cache (même clé stable)
       - name: Save seen.json cache
         uses: actions/cache/save@v4
         with:
