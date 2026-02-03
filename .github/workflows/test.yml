@@ -6,15 +6,18 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: watch-alert-v1
+  group: watch-alerts-v1
   cancel-in-progress: true
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
@@ -22,7 +25,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: seen.json
-          key: watch-alert-seen-v1
+          key: watch-alert-seen-v1-${{ github.run_id }}
+          restore-keys: |
+            watch-alert-seen-v1-
 
       - name: Install deps
         run: pip install -r requirements.txt
@@ -40,4 +45,4 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: seen.json
-          key: watch-alert-seen-v1
+          key: watch-alert-seen-v1-${{ github.run_id }}
