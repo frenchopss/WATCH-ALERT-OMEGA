@@ -7,8 +7,13 @@ HEADERS = {"User-Agent": UA}
 STATE_FILE = "seen.json"
 
 # Limites anti-spam / anti-rate-limit Discord
-MAX_ALERTS_PER_RUN = 40
-DISCORD_SLEEP_SEC = 0.8  # pause entre messages
+MAX_ALERTS_PER_RUN = 40          # global (toutes queries)
+MAX_ALERTS_PER_QUERY = 15        # optionnel: évite qu’une query bouffe tout
+DISCORD_SLEEP_SEC = 0.8          # pause entre messages
+HTTP_SLEEP_SEC = 1.0             # pause entre pages Vinted
+
+MAX_SEEN = 12000
+MAX_ALERTED = 12000
 
 # ------------------ utils ------------------
 
@@ -53,11 +58,9 @@ def fetch_html(url: str):
 def matches(title: str, include, exclude) -> bool:
     t = norm(title)
 
-    # Exclusions simples (ex: "quartz", "bracelet", "piece", etc.)
     if exclude and any(norm(x) in t for x in exclude):
         return False
 
-    # Include = au moins 1 mot-clé match (si liste vide -> ok)
     if include:
         return any(norm(x) in t for x in include)
 
@@ -75,10 +78,16 @@ def discord_notify(webhook_env: str, content: str):
     try:
         r = requests.post(url, json={"content": content}, timeout=15)
         print(f"[DISCORD] {webhook_env} status={r.status_code}")
-        # 204 = OK
+
+        # 429 = rate limit: on attend plus
         if r.status_code == 429:
-            # rate limit : on attend un peu plus
-            time.sleep(2.0)
+            # parfois Discord renvoie un "retry_after" dans le body JSON
+            try:
+                data = r.json()
+                retry_after = float(data.get("retry_after", 2.0))
+                time.sleep(min(5.0, max(1.0, retry_after)))
+            except Exception:
+                time.sleep(2.0)
         return r.status_code
     except Exception as e:
         print("[DISCORD ERROR]", e)
@@ -90,19 +99,12 @@ def discord_notify(webhook_env: str, content: str):
 ITEM_ID_RE = re.compile(r"/items/(\d+)")
 
 def canonical_item_id(url: str) -> str:
-    """
-    Retourne un ID stable: 'vinted:123456789'
-    même si l'URL contient des paramètres referrer/utm.
-    """
     m = ITEM_ID_RE.search(url or "")
     if not m:
         return url  # fallback
     return f"vinted:{m.group(1)}"
 
 def canonical_item_url(url: str) -> str:
-    """
-    Retourne une URL propre sans query string.
-    """
     m = ITEM_ID_RE.search(url or "")
     if not m:
         return url
@@ -123,11 +125,7 @@ def parse_vinted_listings(html: str):
 
         title = a.get_text(" ", strip=True) or "Annonce Vinted"
 
-        out[cid] = {
-            "id": cid,
-            "title": title,
-            "url": clean_url
-        }
+        out[cid] = {"id": cid, "title": title, "url": clean_url}
 
     return list(out.values())
 
@@ -136,10 +134,13 @@ def parse_vinted_listings(html: str):
 
 def main():
     cfg = load_json("config.json", {})
-    state = load_json(STATE_FILE, {"seen_ids": []})
+    state = load_json(STATE_FILE, {"seen_ids": [], "alerted_ids": []})
 
     seen = set(state.get("seen_ids", []))
+    alerted = set(state.get("alerted_ids", []))
+
     new_seen = set(seen)
+    new_alerted = set(alerted)
 
     total_alerts = 0
 
@@ -154,6 +155,7 @@ def main():
             print(f"[SKIP] {name} no webhook_env")
             continue
 
+        query_alerts = 0
         print(f"[QUERY] {name} urls={len(urls)} webhook_env={webhook_env} env_present={bool(os.environ.get(webhook_env))}")
 
         for u in urls:
@@ -164,41 +166,53 @@ def main():
             items = parse_vinted_listings(html)
             print(f"[READ] {name} -> {len(items)} items | {u}")
 
-            # IMPORTANT: on ne marque "vu" que quand ça matche,
-            # sinon tu pollues le seen avec plein de bruit.
             for it in items:
-                if it["id"] in new_seen:
+                # ✅ 1) on marque “vu” dès qu’on le rencontre (anti-bruit / anti-doublon)
+                if it["id"] not in new_seen:
+                    new_seen.add(it["id"])
+
+                # Si déjà alerté, on ne renvoie jamais
+                if it["id"] in new_alerted:
                     continue
 
+                # Filtre qualité
                 if not matches(it["title"], include, exclude):
                     continue
 
-                # si ça matche => on marque comme vu
-                new_seen.add(it["id"])
+                # Caps anti-spam
+                if total_alerts >= MAX_ALERTS_PER_RUN:
+                    print("[STOP] max alerts per run reached (global)")
+                    break
+                if query_alerts >= MAX_ALERTS_PER_QUERY:
+                    print(f"[STOP] max alerts per query reached ({name})")
+                    break
 
-                # alert
+                # ✅ 2) on alerte une seule fois
+                new_alerted.add(it["id"])
+
                 total_alerts += 1
+                query_alerts += 1
+
                 discord_notify(
                     webhook_env,
                     f"🔔 **{name}**\n{it['title']}\n{it['url']}"
                 )
                 time.sleep(DISCORD_SLEEP_SEC)
 
-                if total_alerts >= MAX_ALERTS_PER_RUN:
-                    print("[STOP] max alerts per run reached")
-                    break
-
             if total_alerts >= MAX_ALERTS_PER_RUN:
                 break
+
+            time.sleep(HTTP_SLEEP_SEC)
 
         if total_alerts >= MAX_ALERTS_PER_RUN:
             break
 
     # Sauvegarde état
-    state["seen_ids"] = list(new_seen)[-12000:]
+    state["seen_ids"] = list(new_seen)[-MAX_SEEN:]
+    state["alerted_ids"] = list(new_alerted)[-MAX_ALERTED:]
     save_json(STATE_FILE, state)
 
-    print(f"[END] alerts={total_alerts} seen_ids={len(state['seen_ids'])}")
+    print(f"[END] alerts={total_alerts} seen_ids={len(state['seen_ids'])} alerted_ids={len(state['alerted_ids'])}")
 
 
 if __name__ == "__main__":
