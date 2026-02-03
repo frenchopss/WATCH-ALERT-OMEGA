@@ -3,7 +3,7 @@
     {
       "name": "Omega (100-450)",
       "webhook_env": "WEBHOOK_OMEGA",
-      "include": ["omega", "seamaster"],
+      "include": [],
       "exclude": [
         "réplique", "replica", "fake",
         "quartz", "pile", "battery", "digital", "electronique", "électronique",
@@ -20,7 +20,7 @@
     {
       "name": "Tissot (50-350)",
       "webhook_env": "WEBHOOK_TISSOT",
-      "include": ["tissot"],
+      "include": [],
       "exclude": [
         "réplique", "replica", "fake", "mod",
         "quartz", "pile", "battery", "digital", "electronique", "électronique",
@@ -38,7 +38,7 @@
     {
       "name": "Longines (150-500)",
       "webhook_env": "WEBHOOK_LONGINES",
-      "include": ["longines"],
+      "include": [],
       "exclude": [
         "réplique", "replica", "fake", "mod",
         "quartz", "pile", "battery", "digital", "electronique", "électronique",
@@ -56,7 +56,7 @@
     {
       "name": "Mido (100-300)",
       "webhook_env": "WEBHOOK_MIDO",
-      "include": ["mido"],
+      "include": [],
       "exclude": [
         "réplique", "replica", "fake", "mod",
         "quartz", "pile", "battery", "digital", "electronique", "électronique",
@@ -74,7 +74,7 @@
     {
       "name": "Frederique Constant (100-400)",
       "webhook_env": "WEBHOOK_FC",
-      "include": ["frederique constant"],
+      "include": [],
       "exclude": [
         "tourbillon",
         "réplique", "replica", "fake",
