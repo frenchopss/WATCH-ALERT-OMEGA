@@ -6,12 +6,17 @@
       "include": [],
       "exclude": [
         "réplique", "replica", "fake",
-        "quartz", "pile", "battery", "digital", "electronique", "électronique",
-        "strap", "maillon", "boucle",
-        "boite", "boîte", "ecrin", "écrin",
-        "piece", "pièce", "couronne", "verre",
-        "aiguille", "aiguilles", "lunette", "fond", "boitier", "boîtier",
-        "outil", "accessoire", "parts", "spares"
+
+        "quartz", "pile", "battery", "digital",
+        "electronique", "électronique", "electronic", "electronique",
+
+        "piece", "pièce", "pieces", "pièces",
+        "parts", "spares", "spare",
+        "accessoire", "accessoires",
+        "outil", "outils",
+
+        "bracelet seul", "bracelets seuls",
+        "strap only", "bracelet only"
       ],
       "vinted_urls": [
         "https://www.vinted.fr/catalog?catalog%5B%5D=97&brand_ids%5B%5D=194842&price_from=100&price_to=450&currency=EUR&search_text=Omega%20Seamaster&order=newest_first"
@@ -23,12 +28,17 @@
       "include": [],
       "exclude": [
         "réplique", "replica", "fake", "mod",
-        "quartz", "pile", "battery", "digital", "electronique", "électronique",
-        "strap", "maillon", "boucle",
-        "boite", "boîte", "ecrin", "écrin",
-        "piece", "pièce", "calibre", "couronne", "verre",
-        "aiguille", "aiguilles", "lunette", "fond", "boitier", "boîtier",
-        "outil", "accessoire", "parts", "spares"
+
+        "quartz", "pile", "battery", "digital",
+        "electronique", "électronique", "electronic", "electronique",
+
+        "piece", "pièce", "pieces", "pièces",
+        "parts", "spares", "spare",
+        "accessoire", "accessoires",
+        "outil", "outils",
+
+        "bracelet seul", "bracelets seuls",
+        "strap only", "bracelet only"
       ],
       "vinted_urls": [
         "https://www.vinted.fr/catalog?catalog%5B%5D=97&brand_ids%5B%5D=38365&price_from=50&price_to=350&currency=EUR&search_text=Tissot%20Visodate&order=newest_first",
@@ -41,12 +51,17 @@
       "include": [],
       "exclude": [
         "réplique", "replica", "fake", "mod",
-        "quartz", "pile", "battery", "digital", "electronique", "électronique",
-        "strap", "maillon", "boucle",
-        "boite", "boîte", "ecrin", "écrin",
-        "piece", "pièce", "mouvement", "calibre", "couronne", "verre",
-        "aiguille", "aiguilles", "lunette", "fond", "boitier", "boîtier",
-        "outil", "accessoire", "parts", "spares"
+
+        "quartz", "pile", "battery", "digital",
+        "electronique", "électronique", "electronic", "electronique",
+
+        "piece", "pièce", "pieces", "pièces",
+        "parts", "spares", "spare",
+        "accessoire", "accessoires",
+        "outil", "outils",
+
+        "bracelet seul", "bracelets seuls",
+        "strap only", "bracelet only"
       ],
       "vinted_urls": [
         "https://www.vinted.fr/catalog?catalog%5B%5D=97&brand_ids%5B%5D=249482&price_from=150&price_to=500&currency=EUR&search_text=Longines%20Flagship&order=newest_first",
@@ -59,12 +74,17 @@
       "include": [],
       "exclude": [
         "réplique", "replica", "fake", "mod",
-        "quartz", "pile", "battery", "digital", "electronique", "électronique",
-        "strap", "maillon", "boucle",
-        "boite", "boîte", "ecrin", "écrin",
-        "piece", "pièce", "calibre", "couronne", "verre",
-        "aiguille", "aiguilles", "lunette", "fond", "boitier", "boîtier",
-        "outil", "accessoire", "parts", "spares"
+
+        "quartz", "pile", "battery", "digital",
+        "electronique", "électronique", "electronic", "electronique",
+
+        "piece", "pièce", "pieces", "pièces",
+        "parts", "spares", "spare",
+        "accessoire", "accessoires",
+        "outil", "outils",
+
+        "bracelet seul", "bracelets seuls",
+        "strap only", "bracelet only"
       ],
       "vinted_urls": [
         "https://www.vinted.fr/catalog?catalog%5B%5D=97&brand_ids%5B%5D=323292&price_from=100&price_to=300&currency=EUR&search_text=Mido%20Multifort&order=newest_first",
@@ -77,13 +97,19 @@
       "include": [],
       "exclude": [
         "tourbillon",
+
         "réplique", "replica", "fake",
-        "quartz", "pile", "battery", "digital", "electronique", "électronique",
-        "strap", "maillon", "boucle",
-        "boite", "boîte", "ecrin", "écrin",
-        "piece", "pièce", "calibre", "couronne", "verre",
-        "aiguille", "aiguilles", "lunette", "fond", "boitier", "boîtier",
-        "outil", "accessoire", "parts", "spares"
+
+        "quartz", "pile", "battery", "digital",
+        "electronique", "électronique", "electronic", "electronique",
+
+        "piece", "pièce", "pieces", "pièces",
+        "parts", "spares", "spare",
+        "accessoire", "accessoires",
+        "outil", "outils",
+
+        "bracelet seul", "bracelets seuls",
+        "strap only", "bracelet only"
       ],
       "vinted_urls": [
         "https://www.vinted.fr/catalog?catalog%5B%5D=97&brand_ids%5B%5D=447195&price_from=100&price_to=400&currency=EUR&search_text=Frederique%20Constant&order=newest_first"
