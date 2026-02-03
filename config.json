@@ -3,49 +3,90 @@
     {
       "name": "Omega (100-450)",
       "webhook_env": "WEBHOOK_OMEGA",
-      "include": ["omega"],
-      "exclude": ["réplique", "replica", "fake"],
+      "include": ["omega", "seamaster"],
+      "exclude": [
+        "réplique", "replica", "fake",
+        "quartz", "pile", "battery", "digital", "electronique", "électronique",
+        "strap", "maillon", "boucle",
+        "boite", "boîte", "ecrin", "écrin",
+        "piece", "pièce", "couronne", "verre",
+        "aiguille", "aiguilles", "lunette", "fond", "boitier", "boîtier",
+        "outil", "accessoire", "parts", "spares"
+      ],
       "vinted_urls": [
-        "https://www.vinted.fr/catalog?search_text=Oméga%20Seamaster%20&catalog%5B%5D=97&price_from=100.0&price_to=450.0&currency=EUR&brand_ids%5B%5D=194842&search_id=30753703715&order=newest_first"
+        "https://www.vinted.fr/catalog?catalog%5B%5D=97&brand_ids%5B%5D=194842&price_from=100&price_to=450&currency=EUR&search_text=Omega%20Seamaster&order=newest_first"
       ]
     },
     {
       "name": "Tissot (50-350)",
       "webhook_env": "WEBHOOK_TISSOT",
       "include": ["tissot"],
-      "exclude": ["réplique", "replica", "fake", "mod"],
+      "exclude": [
+        "réplique", "replica", "fake", "mod",
+        "quartz", "pile", "battery", "digital", "electronique", "électronique",
+        "strap", "maillon", "boucle",
+        "boite", "boîte", "ecrin", "écrin",
+        "piece", "pièce", "calibre", "couronne", "verre",
+        "aiguille", "aiguilles", "lunette", "fond", "boitier", "boîtier",
+        "outil", "accessoire", "parts", "spares"
+      ],
       "vinted_urls": [
-        "https://www.vinted.fr/catalog?search_id=30757430030&search_text=Tissot%20Visodate%20&search_by_image_uuid=&catalog[]=97&page=1&time=1769697396&price_from=50&currency=EUR&price_to=350.00&brand_ids[]=38365&order=newest_first",
-        "https://www.vinted.fr/catalog?search_id=30757554389&search_text=Tissot%20Seastar&search_by_image_uuid=&catalog[]=97&page=1&time=1769697665&price_from=50&currency=EUR&price_to=350.00&brand_ids[]=38365&order=newest_first"
+        "https://www.vinted.fr/catalog?catalog%5B%5D=97&brand_ids%5B%5D=38365&price_from=50&price_to=350&currency=EUR&search_text=Tissot%20Visodate&order=newest_first",
+        "https://www.vinted.fr/catalog?catalog%5B%5D=97&brand_ids%5B%5D=38365&price_from=50&price_to=350&currency=EUR&search_text=Tissot%20Seastar&order=newest_first"
       ]
     },
     {
       "name": "Longines (150-500)",
       "webhook_env": "WEBHOOK_LONGINES",
       "include": ["longines"],
-      "exclude": ["réplique", "replica", "fake", "mod"],
+      "exclude": [
+        "réplique", "replica", "fake", "mod",
+        "quartz", "pile", "battery", "digital", "electronique", "électronique",
+        "strap", "maillon", "boucle",
+        "boite", "boîte", "ecrin", "écrin",
+        "piece", "pièce", "mouvement", "calibre", "couronne", "verre",
+        "aiguille", "aiguilles", "lunette", "fond", "boitier", "boîtier",
+        "outil", "accessoire", "parts", "spares"
+      ],
       "vinted_urls": [
-        "https://www.vinted.fr/catalog?search_id=30757576719&search_text=Longines%20flagship&search_by_image_uuid=&catalog[]=97&page=1&time=1769697755&price_from=150.00&currency=EUR&price_to=500.00&brand_ids[]=249482&order=newest_first",
-        "https://www.vinted.fr/catalog?search_id=30757610849&search_text=Longines%20conquest&search_by_image_uuid=&catalog[]=97&page=1&time=1769697805&price_from=150.00&currency=EUR&price_to=500.00&brand_ids[]=249482&order=newest_first"
+        "https://www.vinted.fr/catalog?catalog%5B%5D=97&brand_ids%5B%5D=249482&price_from=150&price_to=500&currency=EUR&search_text=Longines%20Flagship&order=newest_first",
+        "https://www.vinted.fr/catalog?catalog%5B%5D=97&brand_ids%5B%5D=249482&price_from=150&price_to=500&currency=EUR&search_text=Longines%20Conquest&order=newest_first"
       ]
     },
     {
       "name": "Mido (100-300)",
       "webhook_env": "WEBHOOK_MIDO",
       "include": ["mido"],
-      "exclude": ["réplique", "replica", "fake", "mod"],
+      "exclude": [
+        "réplique", "replica", "fake", "mod",
+        "quartz", "pile", "battery", "digital", "electronique", "électronique",
+        "strap", "maillon", "boucle",
+        "boite", "boîte", "ecrin", "écrin",
+        "piece", "pièce", "calibre", "couronne", "verre",
+        "aiguille", "aiguilles", "lunette", "fond", "boitier", "boîtier",
+        "outil", "accessoire", "parts", "spares"
+      ],
       "vinted_urls": [
-        "https://www.vinted.fr/catalog?search_id=30757652419&search_text=Mido%20multifort&search_by_image_uuid=&catalog[]=97&page=1&time=1769697970&price_from=100.00&currency=EUR&price_to=300.00&brand_ids[]=323292&order=newest_first",
-        "https://www.vinted.fr/catalog?search_id=30757704108&search_text=Mido%20commander&search_by_image_uuid=&catalog[]=97&page=1&time=1769698034&price_from=100.00&currency=EUR&price_to=300.00&brand_ids[]=323292&order=newest_first"
+        "https://www.vinted.fr/catalog?catalog%5B%5D=97&brand_ids%5B%5D=323292&price_from=100&price_to=300&currency=EUR&search_text=Mido%20Multifort&order=newest_first",
+        "https://www.vinted.fr/catalog?catalog%5B%5D=97&brand_ids%5B%5D=323292&price_from=100&price_to=300&currency=EUR&search_text=Mido%20Commander&order=newest_first"
       ]
     },
     {
       "name": "Frederique Constant (100-400)",
       "webhook_env": "WEBHOOK_FC",
-      "include": ["frederique", "constant"],
-      "exclude": ["tourbillon", "réplique", "replica", "fake"],
+      "include": ["frederique constant"],
+      "exclude": [
+        "tourbillon",
+        "réplique", "replica", "fake",
+        "quartz", "pile", "battery", "digital", "electronique", "électronique",
+        "strap", "maillon", "boucle",
+        "boite", "boîte", "ecrin", "écrin",
+        "piece", "pièce", "calibre", "couronne", "verre",
+        "aiguille", "aiguilles", "lunette", "fond", "boitier", "boîtier",
+        "outil", "accessoire", "parts", "spares"
+      ],
       "vinted_urls": [
-        "https://www.vinted.fr/catalog?search_id=30757728886&search_text=frederique%20constant&search_by_image_uuid=&catalog[]=97&page=1&time=1769698115&price_from=100.00&currency=EUR&price_to=400.00&brand_ids[]=447195&order=newest_first"
+        "https://www.vinted.fr/catalog?catalog%5B%5D=97&brand_ids%5B%5D=447195&price_from=100&price_to=400&currency=EUR&search_text=Frederique%20Constant&order=newest_first"
       ]
     }
   ]
