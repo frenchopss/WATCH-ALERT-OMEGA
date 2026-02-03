@@ -8,7 +8,7 @@ STATE_FILE = "seen.json"
 
 # Limites anti-spam / anti-rate-limit Discord
 MAX_ALERTS_PER_RUN = 40          # global (toutes queries)
-MAX_ALERTS_PER_QUERY = 15        # optionnel: évite qu’une query bouffe tout
+MAX_ALERTS_PER_QUERY = 15        # évite qu’une query bouffe tout
 DISCORD_SLEEP_SEC = 0.8          # pause entre messages
 HTTP_SLEEP_SEC = 1.0             # pause entre pages Vinted
 
@@ -31,8 +31,6 @@ def load_json(path, default):
     try:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
-    except FileNotFoundError:
-        return default
     except Exception:
         return default
 
@@ -79,15 +77,14 @@ def discord_notify(webhook_env: str, content: str):
         r = requests.post(url, json={"content": content}, timeout=15)
         print(f"[DISCORD] {webhook_env} status={r.status_code}")
 
-        # 429 = rate limit: on attend plus
         if r.status_code == 429:
-            # parfois Discord renvoie un "retry_after" dans le body JSON
             try:
                 data = r.json()
                 retry_after = float(data.get("retry_after", 2.0))
-                time.sleep(min(5.0, max(1.0, retry_after)))
+                time.sleep(min(6.0, max(1.5, retry_after)))
             except Exception:
-                time.sleep(2.0)
+                time.sleep(2.5)
+
         return r.status_code
     except Exception as e:
         print("[DISCORD ERROR]", e)
@@ -101,7 +98,7 @@ ITEM_ID_RE = re.compile(r"/items/(\d+)")
 def canonical_item_id(url: str) -> str:
     m = ITEM_ID_RE.search(url or "")
     if not m:
-        return url  # fallback
+        return url
     return f"vinted:{m.group(1)}"
 
 def canonical_item_url(url: str) -> str:
@@ -120,9 +117,8 @@ def parse_vinted_listings(html: str):
             continue
 
         full_url = href if href.startswith("http") else "https://www.vinted.fr" + href
-        clean_url = canonical_item_url(full_url)
         cid = canonical_item_id(full_url)
-
+        clean_url = canonical_item_url(full_url)
         title = a.get_text(" ", strip=True) or "Annonce Vinted"
 
         out[cid] = {"id": cid, "title": title, "url": clean_url}
@@ -136,11 +132,13 @@ def main():
     cfg = load_json("config.json", {})
     state = load_json(STATE_FILE, {"seen_ids": [], "alerted_ids": []})
 
-    seen = set(state.get("seen_ids", []))
+    # On garde alerted_ids comme vérité "déjà envoyé"
     alerted = set(state.get("alerted_ids", []))
-
-    new_seen = set(seen)
     new_alerted = set(alerted)
+
+    # seen_ids optionnel: on l’aligne sur alerted pour éviter confusion
+    seen = set(state.get("seen_ids", []))
+    new_seen = set(seen)
 
     total_alerts = 0
 
@@ -167,12 +165,10 @@ def main():
             print(f"[READ] {name} -> {len(items)} items | {u}")
 
             for it in items:
-                # ✅ 1) on marque “vu” dès qu’on le rencontre (anti-bruit / anti-doublon)
-                if it["id"] not in new_seen:
-                    new_seen.add(it["id"])
+                cid = it["id"]
 
-                # Si déjà alerté, on ne renvoie jamais
-                if it["id"] in new_alerted:
+                # Déjà alerté => jamais renvoyer
+                if cid in new_alerted:
                     continue
 
                 # Filtre qualité
@@ -187,8 +183,9 @@ def main():
                     print(f"[STOP] max alerts per query reached ({name})")
                     break
 
-                # ✅ 2) on alerte une seule fois
-                new_alerted.add(it["id"])
+                # ✅ Marquer comme alerté AVANT l’envoi (anti-doublon même si 429/retry)
+                new_alerted.add(cid)
+                new_seen.add(cid)
 
                 total_alerts += 1
                 query_alerts += 1
@@ -208,12 +205,11 @@ def main():
             break
 
     # Sauvegarde état
-    state["seen_ids"] = list(new_seen)[-MAX_SEEN:]
     state["alerted_ids"] = list(new_alerted)[-MAX_ALERTED:]
+    state["seen_ids"] = list(new_seen)[-MAX_SEEN:]
     save_json(STATE_FILE, state)
 
     print(f"[END] alerts={total_alerts} seen_ids={len(state['seen_ids'])} alerted_ids={len(state['alerted_ids'])}")
-
 
 if __name__ == "__main__":
     main()
