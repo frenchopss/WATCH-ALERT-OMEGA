@@ -15,8 +15,8 @@
       "include": ["tissot"],
       "exclude": ["réplique", "replica", "fake", "mod"],
       "vinted_urls": [
-        "https://www.vinted.fr/catalog?search_id=30757430030&search_text=Tissot%20Visodate%20&search_by_image_uuid=&catalog[]=97&page=1&time=1769697396&price_from=50&currency=EUR&price_to=350.00&brand_ids[]=38365",
-        "https://www.vinted.fr/catalog?search_id=30757554389&search_text=Tissot%20Seastar&search_by_image_uuid=&catalog[]=97&page=1&time=1769697665&price_from=50&currency=EUR&price_to=350.00&brand_ids[]=38365"
+        "https://www.vinted.fr/catalog?search_id=30757430030&search_text=Tissot%20Visodate%20&search_by_image_uuid=&catalog[]=97&page=1&time=1769697396&price_from=50&currency=EUR&price_to=350.00&brand_ids[]=38365&order=newest_first",
+        "https://www.vinted.fr/catalog?search_id=30757554389&search_text=Tissot%20Seastar&search_by_image_uuid=&catalog[]=97&page=1&time=1769697665&price_from=50&currency=EUR&price_to=350.00&brand_ids[]=38365&order=newest_first"
       ]
     },
     {
@@ -25,8 +25,8 @@
       "include": ["longines"],
       "exclude": ["réplique", "replica", "fake", "mod"],
       "vinted_urls": [
-        "https://www.vinted.fr/catalog?search_id=30757576719&search_text=Longines%20flagship&search_by_image_uuid=&catalog[]=97&page=1&time=1769697755&price_from=150.00&currency=EUR&price_to=500.00&brand_ids[]=249482",
-        "https://www.vinted.fr/catalog?search_id=30757610849&search_text=Longines%20conquest&search_by_image_uuid=&catalog[]=97&page=1&time=1769697805&price_from=150.00&currency=EUR&price_to=500.00&brand_ids[]=249482"
+        "https://www.vinted.fr/catalog?search_id=30757576719&search_text=Longines%20flagship&search_by_image_uuid=&catalog[]=97&page=1&time=1769697755&price_from=150.00&currency=EUR&price_to=500.00&brand_ids[]=249482&order=newest_first",
+        "https://www.vinted.fr/catalog?search_id=30757610849&search_text=Longines%20conquest&search_by_image_uuid=&catalog[]=97&page=1&time=1769697805&price_from=150.00&currency=EUR&price_to=500.00&brand_ids[]=249482&order=newest_first"
       ]
     },
     {
@@ -35,8 +35,8 @@
       "include": ["mido"],
       "exclude": ["réplique", "replica", "fake", "mod"],
       "vinted_urls": [
-        "https://www.vinted.fr/catalog?search_id=30757652419&search_text=Mido%20multifort&search_by_image_uuid=&catalog[]=97&page=1&time=1769697970&price_from=100.00&currency=EUR&price_to=300.00&brand_ids[]=323292",
-        "https://www.vinted.fr/catalog?search_id=30757704108&search_text=Mido%20commander&search_by_image_uuid=&catalog[]=97&page=1&time=1769698034&price_from=100.00&currency=EUR&price_to=300.00&brand_ids[]=323292"
+        "https://www.vinted.fr/catalog?search_id=30757652419&search_text=Mido%20multifort&search_by_image_uuid=&catalog[]=97&page=1&time=1769697970&price_from=100.00&currency=EUR&price_to=300.00&brand_ids[]=323292&order=newest_first",
+        "https://www.vinted.fr/catalog?search_id=30757704108&search_text=Mido%20commander&search_by_image_uuid=&catalog[]=97&page=1&time=1769698034&price_from=100.00&currency=EUR&price_to=300.00&brand_ids[]=323292&order=newest_first"
       ]
     },
     {
@@ -45,7 +45,7 @@
       "include": ["frederique", "constant"],
       "exclude": ["tourbillon", "réplique", "replica", "fake"],
       "vinted_urls": [
-        "https://www.vinted.fr/catalog?search_id=30757728886&search_text=frederique%20constant&search_by_image_uuid=&catalog[]=97&page=1&time=1769698115&price_from=100.00&currency=EUR&price_to=400.00&brand_ids[]=447195"
+        "https://www.vinted.fr/catalog?search_id=30757728886&search_text=frederique%20constant&search_by_image_uuid=&catalog[]=97&page=1&time=1769698115&price_from=100.00&currency=EUR&price_to=400.00&brand_ids[]=447195&order=newest_first"
       ]
     }
   ]
