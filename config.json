@@ -6,7 +6,7 @@
       "include": ["omega"],
       "exclude": ["réplique", "replica", "fake"],
       "vinted_urls": [
-        "https://www.vinted.fr/catalog?search_id=30753708572&search_text=Oméga%20Seamaster%20&search_by_image_uuid=&catalog[]=97&page=1&time=1769687718&price_from=100&currency=EUR&price_to=450&brand_ids[]=194842"
+        "https://www.vinted.fr/catalog?search_text=Oméga%20Seamaster%20&catalog%5B%5D=97&price_from=100.0&price_to=450.0&currency=EUR&brand_ids%5B%5D=194842&search_id=30753703715&order=newest_first"
       ]
     },
     {
