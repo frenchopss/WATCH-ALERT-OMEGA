@@ -5,13 +5,10 @@ on:
     - cron: "*/15 * * * *"
   workflow_dispatch:
 
-concurrency:
-  group: watch-alerts-v1
-  cancel-in-progress: true
-
 jobs:
   run-bot:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,13 +18,12 @@ jobs:
         with:
           python-version: "3.11"
 
+      # ✅ RESTORE AVANT
       - name: Restore seen.json cache
         uses: actions/cache/restore@v4
         with:
           path: seen.json
-          key: watch-alert-seen-v1-${{ github.run_id }}
-          restore-keys: |
-            watch-alert-seen-v1-
+          key: watch-alert-seen-v1
 
       - name: Install deps
         run: pip install -r requirements.txt
@@ -41,8 +37,9 @@ jobs:
           WEBHOOK_FC: ${{ secrets.WEBHOOK_FC }}
         run: python bot.py
 
+      # ✅ SAVE APRÈS
       - name: Save seen.json cache
         uses: actions/cache/save@v4
         with:
           path: seen.json
-          key: watch-alert-seen-v1-${{ github.run_id }}
+          key: watch-alert-seen-v1
