@@ -1,1 +1,4 @@
-{ "seen_ids": [] }
+{
+  "seen_ids": [],
+  "alerted_ids": []
+}
