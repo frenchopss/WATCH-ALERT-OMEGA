@@ -8,7 +8,7 @@ STATE_FILE = "seen.json"
 
 # Anti-spam / cadence
 MAX_ALERTS_PER_RUN = 60          # global
-MAX_ALERTS_PER_QUERY = 10        # évite que Omega/Tissot mangent tout
+MAX_ALERTS_PER_QUERY = 10        # évite qu’une query bouffe tout
 DISCORD_SLEEP_SEC = 0.9
 HTTP_SLEEP_SEC = 1.0
 
@@ -16,8 +16,8 @@ HTTP_SLEEP_SEC = 1.0
 MAX_SEEN = 15000
 MAX_ALERTED = 15000
 
-# Fallback (quand le titre est vide sur la page catalog)
-MAX_ITEM_FETCH_PER_RUN = 25      # limite de fetch item (coût réseau)
+# Fallback quand le titre est vide dans le catalog (coût réseau)
+MAX_ITEM_FETCH_PER_RUN = 25
 
 ITEM_ID_RE = re.compile(r"/items/(\d+)")
 
@@ -60,8 +60,8 @@ def fetch_html(url: str):
 
 # ------------------ matching ------------------
 
-def matches(title: str, include, exclude) -> bool:
-    t = norm(title)
+def matches(text: str, include, exclude) -> bool:
+    t = norm(text or "")
 
     if exclude and any(norm(x) in t for x in exclude):
         return False
@@ -74,7 +74,14 @@ def matches(title: str, include, exclude) -> bool:
 
 # ------------------ discord ------------------
 
-def discord_notify(webhook_env: str, content: str, title: str = None, url: str = None, image_url: str = None, score: int = None):
+def discord_notify(
+    webhook_env: str,
+    content: str,
+    title: str = None,
+    url: str = None,
+    image_url: str = None,
+    score: int = None,
+):
     wh = os.environ.get(webhook_env)
     if not wh:
         print("[NO WEBHOOK]", webhook_env)
@@ -99,17 +106,29 @@ def discord_notify(webhook_env: str, content: str, title: str = None, url: str =
     if embeds:
         payload["embeds"] = embeds
 
+    # 1 tentative + 1 retry si 429
     try:
         r = requests.post(wh, json=payload, timeout=15)
         print(f"[DISCORD] {webhook_env} status={r.status_code}")
 
         if r.status_code == 429:
+            # Discord renvoie souvent retry_after (en ms / sec selon implémentation),
+            # on reste simple et safe.
+            sleep_s = 2.0
             try:
                 data = r.json()
-                retry_after = float(data.get("retry_after", 2.0))
-                time.sleep(min(6.0, max(1.0, retry_after)))
+                ra = data.get("retry_after", 2.0)
+                sleep_s = float(ra)
+                # clamp
+                sleep_s = min(8.0, max(1.0, sleep_s))
             except Exception:
-                time.sleep(2.0)
+                pass
+
+            time.sleep(sleep_s)
+            r2 = requests.post(wh, json=payload, timeout=15)
+            print(f"[DISCORD] {webhook_env} retry status={r2.status_code}")
+            return r2.status_code
+
         return r.status_code
     except Exception as e:
         print("[DISCORD ERROR]", e)
@@ -131,7 +150,7 @@ def canonical_item_url(url: str) -> str:
     return f"https://www.vinted.fr/items/{m.group(1)}"
 
 def extract_title_from_anchor(a):
-    # Plusieurs fallback : title / aria-label / img alt
+    # fallback : title / aria-label / img alt / texte
     t = (a.get("title") or a.get("aria-label") or "").strip()
     if t:
         return t
@@ -142,7 +161,6 @@ def extract_title_from_anchor(a):
         if alt:
             return alt
 
-    # texte visible
     txt = a.get_text(" ", strip=True)
     return txt.strip() if txt else ""
 
@@ -151,7 +169,6 @@ def extract_image_from_anchor(a):
     if not img:
         return None
 
-    # Vinted varie : src / data-src / srcset
     for k in ("src", "data-src"):
         v = img.get(k)
         if v and v.startswith("http"):
@@ -159,7 +176,6 @@ def extract_image_from_anchor(a):
 
     srcset = img.get("srcset")
     if srcset:
-        # prendre la dernière url (souvent la plus grande)
         parts = [p.strip() for p in srcset.split(",") if p.strip()]
         if parts:
             last = parts[-1].split(" ")[0].strip()
@@ -187,7 +203,7 @@ def parse_vinted_listings(html: str):
             "id": cid,
             "title": title or "Annonce Vinted",
             "url": clean_url,
-            "image": image_url
+            "image": image_url,
         }
 
     return list(out.values())
@@ -199,23 +215,29 @@ def fetch_item_details(item_url: str):
 
     soup = BeautifulSoup(html, "lxml")
 
-    # og:title / og:image sont assez stables
+    # og:* est assez stable
     ogt = soup.select_one("meta[property='og:title']")
     ogi = soup.select_one("meta[property='og:image']")
+    ogd = soup.select_one("meta[property='og:description']")
+
     title = (ogt.get("content") if ogt else "") or ""
     image = (ogi.get("content") if ogi else "") or ""
+    desc  = (ogd.get("content") if ogd else "") or ""
 
     title = title.strip()
     image = image.strip()
+    desc = desc.strip()
 
     return {
         "title": title if title else None,
-        "image": image if image else None
+        "image": image if image else None,
+        "desc": desc if desc else None,
     }
 
 def score_listing(title: str) -> int:
     t = norm(title)
     score = 50
+
     # bonus
     if "automatique" in t or "automatic" in t:
         score += 20
@@ -223,6 +245,7 @@ def score_listing(title: str) -> int:
         score += 15
     if "vintage" in t:
         score += 5
+
     # malus
     if "quartz" in t or "pile" in t or "battery" in t:
         score -= 30
@@ -230,6 +253,7 @@ def score_listing(title: str) -> int:
         score -= 25
     if "piece" in t or "pièce" in t or "parts" in t or "spares" in t:
         score -= 30
+
     return max(0, min(100, score))
 
 
@@ -271,18 +295,18 @@ def main():
             print(f"[READ] {name} -> {len(items)} items | {u}")
 
             for it in items:
-                # ID stable
                 cid = it["id"]
 
-                # Marquer vu
+                # Marquer vu (dès rencontre)
                 if cid not in new_seen:
                     new_seen.add(cid)
 
-                # Déjà alerté -> jamais renvoyer
+                # Déjà alerté (historique) -> jamais renvoyer
                 if cid in new_alerted:
                     continue
 
-                # Si titre vide (= gros risque de bruit), on tente un enrichissement sur la page item
+                # Enrichissement si titre générique
+                desc = None
                 if it["title"] == "Annonce Vinted" and item_fetch_budget > 0:
                     details = fetch_item_details(it["url"])
                     item_fetch_budget -= 1
@@ -293,16 +317,20 @@ def main():
                             it["title"] = details["title"]
                         if not it.get("image") and details.get("image"):
                             it["image"] = details["image"]
+                        desc = details.get("desc")
 
-                # Si encore vide -> on skip (sinon tu alertes des accessoires/bruit)
+                # Si encore vide -> skip
                 if it["title"] == "Annonce Vinted":
                     continue
 
-                # Filtre qualité
+                # Filtre qualité sur titre (+ description si dispo)
                 if not matches(it["title"], include, exclude):
                     continue
+                if desc and not matches(desc, [], exclude):
+                    # (pas de include sur desc, mais on exclut les mots parasites si présents en description)
+                    continue
 
-                # Caps anti-spam
+                # Caps
                 if total_alerts >= MAX_ALERTS_PER_RUN:
                     print("[STOP] max alerts per run reached (global)")
                     break
@@ -310,21 +338,25 @@ def main():
                     print(f"[STOP] max alerts per query reached ({name})")
                     break
 
-                # Marquer alerté (même si Discord rate-limit après)
-                new_alerted.add(cid)
-
-                total_alerts += 1
-                query_alerts += 1
-
                 sc = score_listing(it["title"])
-                discord_notify(
+                status = discord_notify(
                     webhook_env,
                     f"🔔 **{name}**\n{it['title']}\n{it['url']}",
                     title=it["title"],
                     url=it["url"],
                     image_url=it.get("image"),
-                    score=sc
+                    score=sc,
                 )
+
+                # ✅ IMPORTANT: on marque "alerté" + on incrémente UNIQUEMENT si Discord OK (204)
+                if status == 204:
+                    new_alerted.add(cid)
+                    total_alerts += 1
+                    query_alerts += 1
+                else:
+                    # pas alerté -> il pourra retenter plus tard
+                    pass
+
                 time.sleep(DISCORD_SLEEP_SEC)
 
             if total_alerts >= MAX_ALERTS_PER_RUN:
