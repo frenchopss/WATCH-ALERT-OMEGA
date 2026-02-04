@@ -6,11 +6,12 @@ UA = "Mozilla/5.0 (compatible; WatchAlertBot/1.0)"
 HEADERS = {"User-Agent": UA}
 STATE_FILE = "seen.json"
 
-# Limites anti-spam / anti-rate-limit Discord
-MAX_ALERTS_PER_RUN = 40          # global (toutes queries)
-MAX_ALERTS_PER_QUERY = 15        # évite qu’une query bouffe tout
-DISCORD_SLEEP_SEC = 0.8          # pause entre messages
-HTTP_SLEEP_SEC = 1.0             # pause entre pages Vinted
+# Limites anti-spam / anti-rate-limit
+MAX_ALERTS_PER_RUN = 120         # global (toutes queries)
+MAX_ALERTS_PER_QUERY = 10        # évite qu’une query bouffe tout
+DISCORD_SLEEP_SEC = 0.8          # pause entre messages discord
+HTTP_SLEEP_SEC = 1.0             # pause entre pages vinted
+ITEM_FETCH_SLEEP_SEC = 0.6       # pause quand on ouvre une page item (og:*)
 
 MAX_SEEN = 12000
 MAX_ALERTED = 12000
@@ -31,6 +32,8 @@ def load_json(path, default):
     try:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
+    except FileNotFoundError:
+        return default
     except Exception:
         return default
 
@@ -53,8 +56,8 @@ def fetch_html(url: str):
 
 # ------------------ matching ------------------
 
-def matches(title: str, include, exclude) -> bool:
-    t = norm(title)
+def matches(text: str, include, exclude) -> bool:
+    t = norm(text)
 
     if exclude and any(norm(x) in t for x in exclude):
         return False
@@ -67,23 +70,36 @@ def matches(title: str, include, exclude) -> bool:
 
 # ------------------ discord ------------------
 
-def discord_notify(webhook_env: str, content: str):
-    url = os.environ.get(webhook_env)
-    if not url:
+def discord_notify(webhook_env: str, title: str, url: str, image_url: str = None, score: int = None):
+    webhook = os.environ.get(webhook_env)
+    if not webhook:
         print("[NO WEBHOOK]", webhook_env)
         return 0
 
+    content = f"🔔 **{title}**\n{url}"
+    if score is not None:
+        content = f"🔔 **{title}** (score: {score})\n{url}"
+
+    payload = {"content": content}
+
+    if image_url:
+        payload["embeds"] = [{
+            "title": title[:256],
+            "url": url,
+            "image": {"url": image_url}
+        }]
+
     try:
-        r = requests.post(url, json={"content": content}, timeout=15)
+        r = requests.post(webhook, json=payload, timeout=15)
         print(f"[DISCORD] {webhook_env} status={r.status_code}")
 
         if r.status_code == 429:
             try:
                 data = r.json()
                 retry_after = float(data.get("retry_after", 2.0))
-                time.sleep(min(6.0, max(1.5, retry_after)))
+                time.sleep(min(5.0, max(1.0, retry_after)))
             except Exception:
-                time.sleep(2.5)
+                time.sleep(2.0)
 
         return r.status_code
     except Exception as e:
@@ -98,7 +114,7 @@ ITEM_ID_RE = re.compile(r"/items/(\d+)")
 def canonical_item_id(url: str) -> str:
     m = ITEM_ID_RE.search(url or "")
     if not m:
-        return url
+        return url  # fallback
     return f"vinted:{m.group(1)}"
 
 def canonical_item_url(url: str) -> str:
@@ -117,28 +133,52 @@ def parse_vinted_listings(html: str):
             continue
 
         full_url = href if href.startswith("http") else "https://www.vinted.fr" + href
-        cid = canonical_item_id(full_url)
         clean_url = canonical_item_url(full_url)
+        cid = canonical_item_id(full_url)
+
+        # Sur les pages liste, le texte peut être vide ou pas le vrai titre.
         title = a.get_text(" ", strip=True) or "Annonce Vinted"
 
         out[cid] = {"id": cid, "title": title, "url": clean_url}
 
     return list(out.values())
 
+def fetch_item_meta(item_url: str):
+    """
+    Ouvre la page de l’annonce et récupère og:title / og:image / og:description.
+    """
+    html = fetch_html(item_url)
+    if not html:
+        return None, None, None
+
+    soup = BeautifulSoup(html, "lxml")
+
+    def get_meta(prop):
+        tag = soup.find("meta", attrs={"property": prop})
+        return tag.get("content") if tag else None
+
+    title = get_meta("og:title")
+    image = get_meta("og:image")
+    desc  = get_meta("og:description")
+
+    return title, image, desc
+
 
 # ------------------ main ------------------
 
 def main():
     cfg = load_json("config.json", {})
+
+    # IMPORTANT: on supporte seen_ids + alerted_ids
     state = load_json(STATE_FILE, {"seen_ids": [], "alerted_ids": []})
+    if "alerted_ids" not in state:
+        state["alerted_ids"] = []
 
-    # On garde alerted_ids comme vérité "déjà envoyé"
-    alerted = set(state.get("alerted_ids", []))
-    new_alerted = set(alerted)
-
-    # seen_ids optionnel: on l’aligne sur alerted pour éviter confusion
     seen = set(state.get("seen_ids", []))
+    alerted = set(state.get("alerted_ids", []))
+
     new_seen = set(seen)
+    new_alerted = set(alerted)
 
     total_alerts = 0
 
@@ -165,17 +205,36 @@ def main():
             print(f"[READ] {name} -> {len(items)} items | {u}")
 
             for it in items:
-                cid = it["id"]
+                # 1) vu dès qu’on le rencontre (évite de re-spammer quand on revoit l’annonce)
+                if it["id"] not in new_seen:
+                    new_seen.add(it["id"])
 
-                # Déjà alerté => jamais renvoyer
-                if cid in new_alerted:
+                # 2) jamais re-alerter si déjà alerté (persistant)
+                if it["id"] in new_alerted:
                     continue
 
-                # Filtre qualité
+                # 3) filtre sur le titre qu’on a
                 if not matches(it["title"], include, exclude):
                     continue
 
-                # Caps anti-spam
+                # 4) si titre trop faible -> on récupère og:title + image depuis la page item
+                real_title = it["title"]
+                image_url = None
+                desc = None
+
+                if real_title == "Annonce Vinted" or len(real_title.strip()) < 6:
+                    time.sleep(ITEM_FETCH_SLEEP_SEC)
+                    t2, img2, d2 = fetch_item_meta(it["url"])
+                    if t2:
+                        real_title = t2
+                    image_url = img2
+                    desc = d2
+
+                    # re-filtrage après vrai titre
+                    if not matches(real_title, include, exclude):
+                        continue
+
+                # 5) caps anti-spam
                 if total_alerts >= MAX_ALERTS_PER_RUN:
                     print("[STOP] max alerts per run reached (global)")
                     break
@@ -183,16 +242,16 @@ def main():
                     print(f"[STOP] max alerts per query reached ({name})")
                     break
 
-                # ✅ Marquer comme alerté AVANT l’envoi (anti-doublon même si 429/retry)
-                new_alerted.add(cid)
-                new_seen.add(cid)
-
+                # 6) on alerte une seule fois
+                new_alerted.add(it["id"])
                 total_alerts += 1
                 query_alerts += 1
 
                 discord_notify(
                     webhook_env,
-                    f"🔔 **{name}**\n{it['title']}\n{it['url']}"
+                    f"{name} — {real_title}",
+                    it["url"],
+                    image_url=image_url
                 )
                 time.sleep(DISCORD_SLEEP_SEC)
 
@@ -205,11 +264,12 @@ def main():
             break
 
     # Sauvegarde état
-    state["alerted_ids"] = list(new_alerted)[-MAX_ALERTED:]
     state["seen_ids"] = list(new_seen)[-MAX_SEEN:]
+    state["alerted_ids"] = list(new_alerted)[-MAX_ALERTED:]
     save_json(STATE_FILE, state)
 
     print(f"[END] alerts={total_alerts} seen_ids={len(state['seen_ids'])} alerted_ids={len(state['alerted_ids'])}")
+
 
 if __name__ == "__main__":
     main()
