@@ -23,7 +23,7 @@ MAX_SEEN = 15000
 MAX_ALERTED = 15000
 
 # Enrichissement page item (coût réseau)
-MAX_ITEM_FETCH_PER_RUN = 40
+MAX_ITEM_FETCH_PER_RUN = 120
 
 # Téléchargements images (coût réseau + taille)
 MAX_IMAGE_DL_PER_RUN = 50
