@@ -17,8 +17,8 @@ MAX_SEEN = 15000
 MAX_ALERTED = 15000
 
 # Budgets (important pour images)
-MAX_ITEM_FETCH_PER_RUN = 160   # augmente si tu veux + d'images
-MAX_ITEMS_PER_PAGE_SCAN = 40   # ne scanne que les plus récentes (newest_first)
+MAX_ITEM_FETCH_PER_RUN = 160
+MAX_ITEMS_PER_PAGE_SCAN = 40  # newest_first => on scanne les plus récents
 
 ITEM_ID_RE = re.compile(r"/items/(\d+)")
 
@@ -63,46 +63,77 @@ def fetch_html(url: str):
 
 def matches(title: str, include, exclude) -> bool:
     t = norm(title)
-
     if exclude and any(norm(x) in t for x in exclude):
         return False
-
     if include:
         return any(norm(x) in t for x in include)
-
     return True
 
 
-# ------------------ discord ------------------
+# ------------------ scoring (simple) ------------------
 
-def discord_notify(webhook_env: str, content: str, title: str = None, url: str = None, image_url: str = None, score: int = None):
+def score_listing(title: str) -> int:
+    t = norm(title)
+    score = 50
+
+    if "automatique" in t or "automatic" in t:
+        score += 20
+    if "mecanique" in t or "mécanique" in t or "manual" in t or "remontage manuel" in t:
+        score += 15
+    if "vintage" in t:
+        score += 5
+
+    if "quartz" in t or "pile" in t or "battery" in t or "digital" in t:
+        score -= 35
+    if "bracelet" in t or "strap" in t or "maillon" in t or "boucle" in t or "clasp" in t:
+        score -= 30
+    if "piece" in t or "pièce" in t or "parts" in t or "spares" in t or "couronne" in t or "verre" in t or "cadran" in t or "dial" in t:
+        score -= 35
+
+    return max(0, min(100, score))
+
+def score_badge(score: int) -> str:
+    if score >= 70:
+        return "🟢"
+    if score >= 50:
+        return "🟠"
+    return "🔴"
+
+
+# ------------------ discord (format amélioré) ------------------
+
+def discord_notify(webhook_env: str, title: str, url: str, image_url: str = None, score: int = None, query_name: str = None):
     wh = os.environ.get(webhook_env)
     if not wh:
         print("[NO WEBHOOK]", webhook_env)
         return 0
 
-    payload = {"content": content}
+    s = score if score is not None else 0
+    badge = score_badge(s)
 
-    embeds = []
-    if title or url or image_url or score is not None:
-        emb = {}
-        if title:
-            emb["title"] = title[:250]
-        if url:
-            emb["url"] = url
-        if score is not None:
-            emb["description"] = f"Score: **{score}/100**"
-        if image_url:
-            emb["image"] = {"url": image_url}
-        embeds.append(emb)
+    # Contenu texte minimal + clair (mobile friendly)
+    content_lines = []
+    if query_name:
+        content_lines.append(f"🔔 **{query_name}**")
+    content_lines.append(f"{badge} **Score {s}/100**")
+    content_lines.append(url)
+    content = "\n".join(content_lines)
 
-    if embeds:
-        payload["embeds"] = embeds
+    # Embed propre
+    emb = {
+        "title": title[:250],
+        "url": url,
+        "description": f"{badge} **Score {s}/100**",
+        "footer": {"text": "Vinted • WatchAlertBot"}
+    }
+    if image_url:
+        emb["image"] = {"url": image_url}
+
+    payload = {"content": content, "embeds": [emb]}
 
     try:
         r = requests.post(wh, json=payload, timeout=15)
-        print(f"[DISCORD] {webhook_env} status={r.status_code}{' (no-attachment)' if (image_url is None) else ''}")
-
+        print(f"[DISCORD] {webhook_env} status={r.status_code}")
         if r.status_code == 429:
             try:
                 data = r.json()
@@ -110,7 +141,6 @@ def discord_notify(webhook_env: str, content: str, title: str = None, url: str =
                 time.sleep(min(6.0, max(1.0, retry_after)))
             except Exception:
                 time.sleep(2.0)
-
         return r.status_code
     except Exception as e:
         print("[DISCORD ERROR]", e)
@@ -135,13 +165,11 @@ def extract_title_from_anchor(a):
     t = (a.get("title") or a.get("aria-label") or "").strip()
     if t:
         return t
-
     img = a.select_one("img")
     if img:
         alt = (img.get("alt") or "").strip()
         if alt:
             return alt
-
     txt = a.get_text(" ", strip=True)
     return txt.strip() if txt else ""
 
@@ -149,12 +177,10 @@ def extract_image_from_anchor(a):
     img = a.select_one("img")
     if not img:
         return None
-
     for k in ("src", "data-src"):
         v = img.get(k)
         if v and v.startswith("http"):
             return v
-
     srcset = img.get("srcset")
     if srcset:
         parts = [p.strip() for p in srcset.split(",") if p.strip()]
@@ -167,75 +193,32 @@ def extract_image_from_anchor(a):
 def parse_vinted_listings(html: str):
     soup = BeautifulSoup(html, "lxml")
     out = {}
-
     for a in soup.select("a[href*='/items/']"):
         href = a.get("href")
         if not href:
             continue
-
         full_url = href if href.startswith("http") else "https://www.vinted.fr" + href
         clean_url = canonical_item_url(full_url)
         cid = canonical_item_id(full_url)
-
         title = extract_title_from_anchor(a)
         image_url = extract_image_from_anchor(a)
-
-        out[cid] = {
-            "id": cid,
-            "title": title or "Annonce Vinted",
-            "url": clean_url,
-            "image": image_url
-        }
-
+        out[cid] = {"id": cid, "title": title or "Annonce Vinted", "url": clean_url, "image": image_url}
     return list(out.values())
 
 def fetch_item_details(item_url: str):
     html = fetch_html(item_url)
     if not html:
         return None
-
     soup = BeautifulSoup(html, "lxml")
-
     ogt = soup.select_one("meta[property='og:title']")
     ogi = soup.select_one("meta[property='og:image']")
     title = (ogt.get("content") if ogt else "") or ""
     image = (ogi.get("content") if ogi else "") or ""
-
     title = title.strip()
     image = image.strip()
-
-    # Nettoyage basique (parfois og:image contient des params)
     if image and image.startswith("//"):
         image = "https:" + image
-
-    return {
-        "title": title if title else None,
-        "image": image if image else None
-    }
-
-def score_listing(title: str) -> int:
-    t = norm(title)
-    score = 50
-
-    # Bonus
-    if "automatique" in t or "automatic" in t:
-        score += 20
-    if "mecanique" in t or "mécanique" in t or "manual" in t or "remontage manuel" in t:
-        score += 15
-    if "vintage" in t:
-        score += 5
-    if "seamaster" in t or "visodate" in t or "seastar" in t or "flagship" in t or "conquest" in t or "multifort" in t or "commander" in t:
-        score += 5
-
-    # Malus (accessoires / pièces / quartz)
-    if "quartz" in t or "pile" in t or "battery" in t or "digital" in t:
-        score -= 35
-    if "bracelet" in t or "strap" in t or "maillon" in t or "boucle" in t or "clasp" in t:
-        score -= 30
-    if "piece" in t or "pièce" in t or "parts" in t or "spares" in t or "couronne" in t or "verre" in t or "cadran" in t or "dial" in t:
-        score -= 35
-
-    return max(0, min(100, score))
+    return {"title": title if title else None, "image": image if image else None}
 
 
 # ------------------ main ------------------
@@ -272,11 +255,8 @@ def main():
             if not html:
                 continue
 
-            items = parse_vinted_listings(html)
+            items = parse_vinted_listings(html)[:MAX_ITEMS_PER_PAGE_SCAN]
             print(f"[READ] {name} -> {len(items)} items | {u}")
-
-            # Ne traiter que les plus récents (tu es en newest_first)
-            items = items[:MAX_ITEMS_PER_PAGE_SCAN]
 
             for it in items:
                 cid = it["id"]
@@ -288,29 +268,24 @@ def main():
                     continue
 
                 # Pré-filtre rapide si titre exploitable
-                # (si "Annonce Vinted", on ne filtre pas encore)
-                if it["title"] != "Annonce Vinted":
-                    if not matches(it["title"], include, exclude):
-                        continue
+                if it["title"] != "Annonce Vinted" and not matches(it["title"], include, exclude):
+                    continue
 
-                # Enrichissement seulement si nécessaire (titre générique OU image manquante)
+                # Enrichissement (priorité image)
                 need_details = (it["title"] == "Annonce Vinted") or (not it.get("image"))
                 if need_details and item_fetch_budget > 0:
                     details = fetch_item_details(it["url"])
                     item_fetch_budget -= 1
                     time.sleep(HTTP_SLEEP_SEC)
-
                     if details:
                         if details.get("title"):
                             it["title"] = details["title"]
                         if details.get("image"):
                             it["image"] = details["image"]
 
-                # Si encore pas de titre, on skip (évite gros bruit)
                 if it["title"] == "Annonce Vinted":
                     continue
 
-                # Filtre final
                 if not matches(it["title"], include, exclude):
                     continue
 
@@ -322,23 +297,22 @@ def main():
                     print(f"[STOP] max alerts per query reached ({name})")
                     break
 
-                # Mark alerted (anti-doublons)
                 new_alerted.add(cid)
 
                 sc = score_listing(it["title"])
 
+                # Envoi Discord: format propre + lisible
                 discord_notify(
                     webhook_env,
-                    f"🔔 **{name}**\n{it['title']}\n{it['url']}",
                     title=it["title"],
                     url=it["url"],
                     image_url=it.get("image"),
-                    score=sc
+                    score=sc,
+                    query_name=name
                 )
 
                 total_sent += 1
                 query_sent += 1
-
                 time.sleep(DISCORD_SLEEP_SEC)
 
             if total_sent >= MAX_ALERTS_PER_RUN:
