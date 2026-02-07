@@ -70,118 +70,156 @@ def matches(title: str, include, exclude) -> bool:
     return True
 
 
-# ------------------ scoring (simple) ------------------
-
-# ------------------ scoring FLIP (orienté revente rapide) ------------------
+# # ------------------ scoring FLIP (orienté revente rapide) ------------------
 
 def score_badge(score: int) -> str:
-    if score >= 75:
+    if score >= 78:
         return "🟢"
-    if score >= 55:
+    if score >= 60:
         return "🟠"
     return "🔴"
 
 
-def score_listing(title: str) -> int:
+def score_listing(title: str, query_name: str = ""):
     """
-    Scoring orienté FLIP :
-    - priorité à la simplicité
-    - faible risque
-    - faible effort
-    - revente rapide
+    Scoring FLIP (0-100) basé sur le TITRE.
+    Objectif: revente rapide, faible risque, faible effort, éviter accessoires/HS/incertains.
+    Retourne: (score:int, reasons:list[str])
     """
     t = norm(title)
     score = 50
+    reasons = []
 
-    # ---- 1) Mouvement / simplicité ----
-    if any(k in t for k in ["automatique", "automatic", "auto "]):
-        score += 25
+    def add(delta: int, why: str):
+        nonlocal score
+        score += delta
+        reasons.append(f"{delta:+} {why}")
 
-    if any(k in t for k in ["mecanique", "mécanique", "manual", "remontage manuel", "hand winding"]):
-        score += 20
-
-    if any(k in t for k in ["quartz", "pile", "battery", "digital", "electronique", "électronique", "electronic"]):
-        score -= 45
-
-    # ---- 2) Fonctionnement / état ----
-    if any(k in t for k in ["fonctionne", "fonctionnel", "ok", "marche", "testee", "testée", "parfait etat", "parfait état"]):
-        score += 10
-
-    if any(k in t for k in ["revisee", "révisée", "revision", "révision", "serviced", "service"]):
-        score += 12
-
-    # ---- 3) Risque fort / annonces à problème ----
-    if any(k in t for k in [
-        "pour pieces", "pour pièces", "pieces", "pièces",
-        "hs", "ne marche pas", "ne fonctionne pas",
-        "a reparer", "à réparer", "repair",
-        "spares", "parts only",
-        "casse", "cassé", "cassée",
-        "incomplet", "incomplète", "manque", "missing"
-    ]):
-        score -= 60
-
-    if any(k in t for k in [
-        "a verifier", "à vérifier",
-        "je ne sais pas", "je sais pas",
-        "inconnu", "unknown",
-        "non teste", "non testé", "non testee", "non testée",
-        "dans son jus"
-    ]):
-        score -= 18
-
-    # ---- 4) Accessoires / pièces détachées (bruit) ----
-    if any(k in t for k in [
-        "bracelet", "strap", "maillon", "boucle", "clasp",
+    # 0) Garde-fous (si ça ressemble à un accessoire -> rouge direct)
+    hard_accessory = [
+        "bracelet seul", "strap only", "bracelet only",
+        "maillon", "boucle", "clasp",
         "couronne", "verre", "cadran", "dial",
-        "aiguille", "aiguilles",
+        "aiguilles", "aiguille",
         "lunette", "bezel",
-        "fond", "boitier", "boîtier",
+        "boitier", "boîtier",
         "outil", "outils",
-        "accessoire", "accessoires"
-    ]):
-        score -= 35
+        "accessoire", "accessoires",
+        "parts", "spares", "spare", "pieces", "pièces", "piece", "pièce",
+    ]
+    if any(k in t for k in hard_accessory):
+        add(-65, "probable accessoire/pièce (flip faible)")
+        return max(0, min(100, score)), reasons[:6]
 
-    if any(k in t for k in ["bracelet seul", "bracelets seuls", "strap only", "bracelet only"]):
-        score -= 50
+    # 1) Mouvement / liquidité
+    if any(k in t for k in ["automatique", "automatic", "auto "]):
+        add(+22, "automatique (liquidité ↑)")
+    if any(k in t for k in ["mecanique", "mécanique", "remontage manuel", "hand winding", "manual"]):
+        add(+16, "mécanique/manuel (liquidité ↑)")
+    if any(k in t for k in ["quartz", "pile", "battery", "digital", "électronique", "electronique", "electronic"]):
+        add(-38, "quartz/digital (flip ↓)")
 
-    # ---- 5) Indices de liquidité rapide ----
-    if any(k in t for k in ["vintage", "original", "authentique", "full set", "complet", "complète"]):
-        score += 6
+    # 2) Etat / fiabilité (mots vendeurs)
+    if any(k in t for k in ["fonctionne", "fonctionnel", "marche", "ok", "tested", "testee", "testée"]):
+        add(+10, "fonctionnement annoncé")
+    if any(k in t for k in ["révisée", "revisee", "révision", "revision", "serviced", "service", "facture de revision", "facture de révision"]):
+        add(+14, "révisée / service (risque ↓)")
+    if any(k in t for k in ["garantie", "warranty"]):
+        add(+6, "garantie (risque ↓)")
 
-    # Titres trop courts ou génériques = prudence
-    if len(t) < 10 or t in [
-        "montre", "omega", "tissot", "longines", "mido", "frederique constant"
-    ]:
-        score -= 10
+    # 3) Red flags (risque fort / temps perdu)
+    heavy_redflags = [
+        "pour pieces", "pour pièces", "hs", "ne marche pas", "ne fonctionne pas",
+        "a reparer", "à réparer", "a réparer", "réparer", "repair",
+        "cassé", "cassée", "casse", "incomplet", "incomplète", "manque", "missing",
+    ]
+    if any(k in t for k in heavy_redflags):
+        add(-60, "HS/à réparer/pour pièces (risque max)")
+    light_redflags = [
+        "a verifier", "à vérifier", "a vérifier",
+        "je ne sais pas", "je sais pas",
+        "non teste", "non testé", "non testee", "non testée",
+        "dans son jus",
+    ]
+    if any(k in t for k in light_redflags):
+        add(-18, "incertitude/non testé (risque ↑)")
 
-    return max(0, min(100, score))
+    # 4) Accessoires / complet (liquidité + marge)
+    if any(k in t for k in ["boite", "boîte", "box", "écrin", "ecrin", "papiers", "papers", "certificat", "full set", "complet", "complète"]):
+        add(+8, "boîte/papiers/full set (revente + facile)")
+    if any(k in t for k in ["sans bracelet", "sans brac", "bracelet absent"]):
+        add(-8, "incomplet (bracelet absent)")
+
+    # 5) Indices “bonne affaire” (marge potentielle)
+    if any(k in t for k in ["urgent", "demenagement", "déménagement", "a debattre", "à débattre", "negociable", "négociable", "faire offre", "offre"]):
+        add(+6, "prix potentiellement négociable")
+    if any(k in t for k in ["prix ferme", "non negociable", "non négociable"]):
+        add(-4, "prix ferme (marge ↓)")
+
+    # 6) Taille (liquidité marché) — heuristique légère
+    # Favorise 34–41, pénalise extrêmes.
+    m = re.search(r"\b(\d{2})\s*mm\b", t)
+    if m:
+        mm = int(m.group(1))
+        if 34 <= mm <= 41:
+            add(+4, f"taille {mm}mm (liquide)")
+        elif mm <= 32 or mm >= 44:
+            add(-6, f"taille {mm}mm (liquidité ↓)")
+
+    # 7) Ciblage par marque/gamme (petits bonus de liquidité)
+    qn = norm(query_name)
+    if "omega" in qn:
+        if any(k in t for k in ["seamaster", "constellation", "de ville", "geneve", "genève", "genève"]):
+            add(+6, "gamme Omega recherchée")
+    if "longines" in qn:
+        if any(k in t for k in ["conquest", "flagship", "hydroconquest"]):
+            add(+4, "gamme Longines recherchée")
+    if "tissot" in qn:
+        if any(k in t for k in ["visodate", "seastar", "prx"]):
+            add(+3, "gamme Tissot recherchée")
+
+    # 8) Titres trop génériques -> prudence
+    if len(t) < 12 or t in ["montre", "omega", "tissot", "longines", "mido", "frederique constant", "frederique"]:
+        add(-10, "titre trop générique (bruit/risque)")
+
+    # Clamp + raisons (top 6)
+    score = max(0, min(100, score))
+    # Garde les raisons les plus “fortes” (tri par valeur absolue)
+    reasons_sorted = sorted(reasons, key=lambda x: abs(int(x.split(" ")[0])), reverse=True)[:6]
+    return score, reasons_sorted
 
 
-# ------------------ discord (format amélioré) ------------------
+# ------------------ discord (format + raisons + image) ------------------
 
-def discord_notify(webhook_env: str, title: str, url: str, image_url: str = None, score: int = None, query_name: str = None):
+def discord_notify(webhook_env: str, title: str, url: str, image_url: str = None, score: int = None, query_name: str = None, reasons=None):
     wh = os.environ.get(webhook_env)
     if not wh:
         print("[NO WEBHOOK]", webhook_env)
         return 0
 
-    s = score if score is not None else 0
+    s = int(score or 0)
     badge = score_badge(s)
+    reasons = reasons or []
 
-    # Contenu texte minimal + clair (mobile friendly)
+    # Texte (mobile friendly)
     content_lines = []
     if query_name:
         content_lines.append(f"🔔 **{query_name}**")
-    content_lines.append(f"{badge} **Score {s}/100**")
+    content_lines.append(f"{badge} **Score FLIP {s}/100**")
     content_lines.append(url)
     content = "\n".join(content_lines)
 
-    # Embed propre
+    # Embed
+    desc_lines = [f"{badge} **Score FLIP {s}/100**"]
+    if reasons:
+        desc_lines.append("")
+        desc_lines.append("**Pourquoi :**")
+        desc_lines.extend([f"• {r}" for r in reasons[:6]])
+
     emb = {
         "title": title[:250],
         "url": url,
-        "description": f"{badge} **Score {s}/100**",
+        "description": "\n".join(desc_lines)[:3900],
         "footer": {"text": "Vinted • WatchAlertBot"}
     }
     if image_url:
@@ -191,7 +229,7 @@ def discord_notify(webhook_env: str, title: str, url: str, image_url: str = None
 
     try:
         r = requests.post(wh, json=payload, timeout=15)
-        print(f"[DISCORD] {webhook_env} status={r.status_code}")
+        print(f"[DISCORD] {webhook_env} status={r.status_code}" + (" (no-attachment)" if not image_url else ""))
         if r.status_code == 429:
             try:
                 data = r.json()
