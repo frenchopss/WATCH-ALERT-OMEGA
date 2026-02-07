@@ -70,7 +70,7 @@ def matches(title: str, include, exclude) -> bool:
     return True
 
 
-# # ------------------ scoring FLIP (orienté revente rapide) ------------------
+# ------------------ scoring FLIP (orienté revente rapide) ------------------
 
 def score_badge(score: int) -> str:
     if score >= 78:
@@ -135,6 +135,7 @@ def score_listing(title: str, query_name: str = ""):
     ]
     if any(k in t for k in heavy_redflags):
         add(-60, "HS/à réparer/pour pièces (risque max)")
+
     light_redflags = [
         "a verifier", "à vérifier", "a vérifier",
         "je ne sais pas", "je sais pas",
@@ -156,8 +157,7 @@ def score_listing(title: str, query_name: str = ""):
     if any(k in t for k in ["prix ferme", "non negociable", "non négociable"]):
         add(-4, "prix ferme (marge ↓)")
 
-    # 6) Taille (liquidité marché) — heuristique légère
-    # Favorise 34–41, pénalise extrêmes.
+    # 6) Taille (liquidité marché)
     m = re.search(r"\b(\d{2})\s*mm\b", t)
     if m:
         mm = int(m.group(1))
@@ -166,25 +166,20 @@ def score_listing(title: str, query_name: str = ""):
         elif mm <= 32 or mm >= 44:
             add(-6, f"taille {mm}mm (liquidité ↓)")
 
-    # 7) Ciblage par marque/gamme (petits bonus de liquidité)
+    # 7) Ciblage par gamme (petits bonus)
     qn = norm(query_name)
-    if "omega" in qn:
-        if any(k in t for k in ["seamaster", "constellation", "de ville", "geneve", "genève", "genève"]):
-            add(+6, "gamme Omega recherchée")
-    if "longines" in qn:
-        if any(k in t for k in ["conquest", "flagship", "hydroconquest"]):
-            add(+4, "gamme Longines recherchée")
-    if "tissot" in qn:
-        if any(k in t for k in ["visodate", "seastar", "prx"]):
-            add(+3, "gamme Tissot recherchée")
+    if "omega" in qn and any(k in t for k in ["seamaster", "constellation", "de ville", "geneve", "genève"]):
+        add(+6, "gamme Omega recherchée")
+    if "longines" in qn and any(k in t for k in ["conquest", "flagship", "hydroconquest"]):
+        add(+4, "gamme Longines recherchée")
+    if "tissot" in qn and any(k in t for k in ["visodate", "seastar", "prx"]):
+        add(+3, "gamme Tissot recherchée")
 
-    # 8) Titres trop génériques -> prudence
+    # 8) Titres trop génériques
     if len(t) < 12 or t in ["montre", "omega", "tissot", "longines", "mido", "frederique constant", "frederique"]:
         add(-10, "titre trop générique (bruit/risque)")
 
-    # Clamp + raisons (top 6)
     score = max(0, min(100, score))
-    # Garde les raisons les plus “fortes” (tri par valeur absolue)
     reasons_sorted = sorted(reasons, key=lambda x: abs(int(x.split(" ")[0])), reverse=True)[:6]
     return score, reasons_sorted
 
@@ -201,7 +196,6 @@ def discord_notify(webhook_env: str, title: str, url: str, image_url: str = None
     badge = score_badge(s)
     reasons = reasons or []
 
-    # Texte (mobile friendly)
     content_lines = []
     if query_name:
         content_lines.append(f"🔔 **{query_name}**")
@@ -209,7 +203,6 @@ def discord_notify(webhook_env: str, title: str, url: str, image_url: str = None
     content_lines.append(url)
     content = "\n".join(content_lines)
 
-    # Embed
     desc_lines = [f"{badge} **Score FLIP {s}/100**"]
     if reasons:
         desc_lines.append("")
@@ -395,16 +388,16 @@ def main():
 
                 new_alerted.add(cid)
 
-                sc = score_listing(it["title"])
+                sc, why = score_listing(it["title"], query_name=name)
 
-                # Envoi Discord: format propre + lisible
                 discord_notify(
                     webhook_env,
                     title=it["title"],
                     url=it["url"],
                     image_url=it.get("image"),
                     score=sc,
-                    query_name=name
+                    query_name=name,
+                    reasons=why
                 )
 
                 total_sent += 1
