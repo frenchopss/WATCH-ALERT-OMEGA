@@ -72,32 +72,90 @@ def matches(title: str, include, exclude) -> bool:
 
 # ------------------ scoring (simple) ------------------
 
+# ------------------ scoring FLIP (orienté revente rapide) ------------------
+
+def score_badge(score: int) -> str:
+    if score >= 75:
+        return "🟢"
+    if score >= 55:
+        return "🟠"
+    return "🔴"
+
+
 def score_listing(title: str) -> int:
+    """
+    Scoring orienté FLIP :
+    - priorité à la simplicité
+    - faible risque
+    - faible effort
+    - revente rapide
+    """
     t = norm(title)
     score = 50
 
-    if "automatique" in t or "automatic" in t:
-        score += 20
-    if "mecanique" in t or "mécanique" in t or "manual" in t or "remontage manuel" in t:
-        score += 15
-    if "vintage" in t:
-        score += 5
+    # ---- 1) Mouvement / simplicité ----
+    if any(k in t for k in ["automatique", "automatic", "auto "]):
+        score += 25
 
-    if "quartz" in t or "pile" in t or "battery" in t or "digital" in t:
+    if any(k in t for k in ["mecanique", "mécanique", "manual", "remontage manuel", "hand winding"]):
+        score += 20
+
+    if any(k in t for k in ["quartz", "pile", "battery", "digital", "electronique", "électronique", "electronic"]):
+        score -= 45
+
+    # ---- 2) Fonctionnement / état ----
+    if any(k in t for k in ["fonctionne", "fonctionnel", "ok", "marche", "testee", "testée", "parfait etat", "parfait état"]):
+        score += 10
+
+    if any(k in t for k in ["revisee", "révisée", "revision", "révision", "serviced", "service"]):
+        score += 12
+
+    # ---- 3) Risque fort / annonces à problème ----
+    if any(k in t for k in [
+        "pour pieces", "pour pièces", "pieces", "pièces",
+        "hs", "ne marche pas", "ne fonctionne pas",
+        "a reparer", "à réparer", "repair",
+        "spares", "parts only",
+        "casse", "cassé", "cassée",
+        "incomplet", "incomplète", "manque", "missing"
+    ]):
+        score -= 60
+
+    if any(k in t for k in [
+        "a verifier", "à vérifier",
+        "je ne sais pas", "je sais pas",
+        "inconnu", "unknown",
+        "non teste", "non testé", "non testee", "non testée",
+        "dans son jus"
+    ]):
+        score -= 18
+
+    # ---- 4) Accessoires / pièces détachées (bruit) ----
+    if any(k in t for k in [
+        "bracelet", "strap", "maillon", "boucle", "clasp",
+        "couronne", "verre", "cadran", "dial",
+        "aiguille", "aiguilles",
+        "lunette", "bezel",
+        "fond", "boitier", "boîtier",
+        "outil", "outils",
+        "accessoire", "accessoires"
+    ]):
         score -= 35
-    if "bracelet" in t or "strap" in t or "maillon" in t or "boucle" in t or "clasp" in t:
-        score -= 30
-    if "piece" in t or "pièce" in t or "parts" in t or "spares" in t or "couronne" in t or "verre" in t or "cadran" in t or "dial" in t:
-        score -= 35
+
+    if any(k in t for k in ["bracelet seul", "bracelets seuls", "strap only", "bracelet only"]):
+        score -= 50
+
+    # ---- 5) Indices de liquidité rapide ----
+    if any(k in t for k in ["vintage", "original", "authentique", "full set", "complet", "complète"]):
+        score += 6
+
+    # Titres trop courts ou génériques = prudence
+    if len(t) < 10 or t in [
+        "montre", "omega", "tissot", "longines", "mido", "frederique constant"
+    ]:
+        score -= 10
 
     return max(0, min(100, score))
-
-def score_badge(score: int) -> str:
-    if score >= 70:
-        return "🟢"
-    if score >= 50:
-        return "🟠"
-    return "🔴"
 
 
 # ------------------ discord (format amélioré) ------------------
