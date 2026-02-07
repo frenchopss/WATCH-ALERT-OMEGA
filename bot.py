@@ -20,6 +20,9 @@ MAX_ALERTED = 15000
 MAX_ITEM_FETCH_PER_RUN = 160
 MAX_ITEMS_PER_PAGE_SCAN = 40  # newest_first => on scanne les plus récents
 
+# Filtre final (gain de temps)
+SCORE_MIN_TO_ALERT = 60  # <- ajuste 55/60/65 selon ton flux
+
 ITEM_ID_RE = re.compile(r"/items/(\d+)")
 
 
@@ -409,9 +412,13 @@ def main():
                     print(f"[STOP] max alerts per query reached ({name})")
                     break
 
-                new_alerted.add(cid)
-
                 sc, why = score_listing(it["title"], query_name=name)
+
+                # ---- Filtre final : gain de temps ----
+                if sc < SCORE_MIN_TO_ALERT:
+                    continue
+
+                new_alerted.add(cid)
 
                 discord_notify(
                     webhook_env,
