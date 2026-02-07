@@ -20,10 +20,10 @@ MAX_ALERTED = 15000
 MAX_ITEM_FETCH_PER_RUN = 160
 MAX_ITEMS_PER_PAGE_SCAN = 40  # newest_first => on scanne les plus récents
 
-# Filtre final (gain de temps)
-SCORE_MIN_TO_ALERT = 60  # <- ajuste 55/60/65 selon ton flux
-
 ITEM_ID_RE = re.compile(r"/items/(\d+)")
+
+# Filtrage "Option A" : on n'envoie que si score >= seuil
+MIN_SCORE_TO_SEND = 60  # ajuste: 55 = plus permissif, 65 = plus strict
 
 
 # ------------------ utils ------------------
@@ -86,98 +86,92 @@ def score_badge(score: int) -> str:
 def score_listing(title: str, query_name: str = ""):
     """
     Scoring FLIP (0-100) basé sur le TITRE.
-    Objectif: revente rapide, faible risque, faible effort.
+    Objectif: revente rapide, faible risque, faible effort, éviter accessoires/HS/incertains.
     Retourne: (score:int, reasons:list[str])
     """
     t = norm(title)
+
+    # ⛔ KILL SWITCH — objets NON montres (jamais flip)
+    non_watch_items = [
+        "manual", "manuali", "manuel", "notice", "livret",
+        "instructions", "instruction", "guide",
+        "documentation", "doc",
+        "papers only", "papiers seuls", "carte seule",
+        "booklet", "warranty card",
+    ]
+    if any(k in t for k in non_watch_items):
+        return 0, ["⛔ Objet non-montre (notice / documentation)"]
+
     score = 50
     reasons = []
 
     def add(delta: int, why: str):
         nonlocal score
         score += delta
-        reasons.append((delta, why))
+        reasons.append(f"{delta:+} {why}")
 
-    # --- Dictionnaires (mots clés) ---
-    watch_signals = [
-        "montre", "watch", "automatic", "automatique", "mecanique", "mécanique",
-        "chronographe", "chrono", "date", "cal.", "calibre", "ref", "reference", "référence"
+    # 0) Garde-fous (si ça ressemble à un accessoire -> rouge direct)
+    hard_accessory = [
+        "bracelet seul", "strap only", "bracelet only",
+        "maillon", "boucle", "clasp",
+        "couronne", "verre", "cadran", "dial",
+        "aiguilles", "aiguille",
+        "lunette", "bezel",
+        "boitier", "boîtier",
+        "outil", "outils",
+        "accessoire", "accessoires",
+        "parts", "spares", "spare", "pieces", "pièces", "piece", "pièce",
     ]
+    if any(k in t for k in hard_accessory):
+        add(-65, "probable accessoire/pièce (flip faible)")
+        return max(0, min(100, score)), reasons[:6]
 
-    # Accessoires / pièces : pénalise fort, sans SKIP (Option B)
-    accessory_signals = [
-        "bracelet", "strap", "band", "maillon", "boucle", "clasp", "ardillon",
-        "couronne", "verre", "cadran", "dial", "aiguille", "aiguilles",
-        "lunette", "bezel", "insert", "fond", "caseback", "boitier", "boîtier",
-        "outil", "outils", "accessoire", "accessoires",
-        "parts", "spares", "spare", "piece", "pièce", "pieces", "pièces"
-    ]
-
-    accessory_only_phrases = [
-        "bracelet seul", "bracelets seuls", "strap only", "bracelet only",
-        "cadran seul", "couronne seule", "verre seul", "maillons seuls"
-    ]
-
-    # --- 0) Accessoire vs Montre (règle robuste) ---
-    is_accessory = any(k in t for k in accessory_signals) or any(p in t for p in accessory_only_phrases)
-    looks_like_watch = any(k in t for k in watch_signals)
-
-    if any(p in t for p in accessory_only_phrases):
-        add(-70, "accessoire/pièce 'seul' (flip très faible)")
-    elif is_accessory and not looks_like_watch:
-        add(-55, "probable accessoire/pièce (flip faible)")
-    elif is_accessory and looks_like_watch:
-        add(-18, "mention accessoire (prudence)")
-
-    # --- 1) Mouvement / simplicité ---
+    # 1) Mouvement / liquidité
     if any(k in t for k in ["automatique", "automatic", "auto "]):
         add(+22, "automatique (liquidité ↑)")
     if any(k in t for k in ["mecanique", "mécanique", "remontage manuel", "hand winding", "manual"]):
         add(+16, "mécanique/manuel (liquidité ↑)")
     if any(k in t for k in ["quartz", "pile", "battery", "digital", "électronique", "electronique", "electronic"]):
-        add(-40, "quartz/digital (flip ↓)")
+        add(-38, "quartz/digital (flip ↓)")
 
-    # --- 2) Etat / fiabilité ---
-    if any(k in t for k in ["fonctionne", "fonctionnel", "marche", "ok", "tested", "testee", "testée", "testé"]):
+    # 2) Etat / fiabilité (mots vendeurs)
+    if any(k in t for k in ["fonctionne", "fonctionnel", "marche", "ok", "tested", "testee", "testée"]):
         add(+10, "fonctionnement annoncé")
-    if any(k in t for k in ["révisée", "revisee", "révision", "revision", "serviced", "service"]):
+    if any(k in t for k in ["révisée", "revisee", "révision", "revision", "serviced", "service", "facture de revision", "facture de révision"]):
         add(+14, "révisée / service (risque ↓)")
     if any(k in t for k in ["garantie", "warranty"]):
         add(+6, "garantie (risque ↓)")
 
-    # --- 3) Red flags lourds ---
+    # 3) Red flags (risque fort / temps perdu)
     heavy_redflags = [
         "pour pieces", "pour pièces", "hs", "ne marche pas", "ne fonctionne pas",
         "a reparer", "à réparer", "a réparer", "réparer", "repair",
-        "cassé", "cassée", "casse", "incomplet", "incomplète",
-        "manque", "missing"
+        "cassé", "cassée", "casse", "incomplet", "incomplète", "manque", "missing",
     ]
     if any(k in t for k in heavy_redflags):
-        add(-65, "HS/à réparer/pour pièces (risque max)")
-
-    # --- 4) Red flags légers (incertitude) ---
+        add(-60, "HS/à réparer/pour pièces (risque max)")
     light_redflags = [
         "a verifier", "à vérifier", "a vérifier",
         "je ne sais pas", "je sais pas",
         "non teste", "non testé", "non testee", "non testée",
-        "dans son jus"
+        "dans son jus",
     ]
     if any(k in t for k in light_redflags):
         add(-18, "incertitude/non testé (risque ↑)")
 
-    # --- 5) Full set / complétude ---
+    # 4) Accessoires / complet (liquidité + marge)
     if any(k in t for k in ["boite", "boîte", "box", "écrin", "ecrin", "papiers", "papers", "certificat", "full set", "complet", "complète"]):
         add(+8, "boîte/papiers/full set (revente + facile)")
     if any(k in t for k in ["sans bracelet", "sans brac", "bracelet absent"]):
-        add(-6, "bracelet absent (revente + dure)")
+        add(-8, "incomplet (bracelet absent)")
 
-    # --- 6) Indices négociation (marge potentielle) ---
+    # 5) Indices “bonne affaire” (marge potentielle)
     if any(k in t for k in ["urgent", "demenagement", "déménagement", "a debattre", "à débattre", "negociable", "négociable", "faire offre", "offre"]):
         add(+6, "prix potentiellement négociable")
     if any(k in t for k in ["prix ferme", "non negociable", "non négociable"]):
         add(-4, "prix ferme (marge ↓)")
 
-    # --- 7) Taille (liquidité) ---
+    # 6) Taille (liquidité marché) — heuristique légère
     m = re.search(r"\b(\d{2})\s*mm\b", t)
     if m:
         mm = int(m.group(1))
@@ -186,31 +180,30 @@ def score_listing(title: str, query_name: str = ""):
         elif mm <= 32 or mm >= 44:
             add(-6, f"taille {mm}mm (liquidité ↓)")
 
-    # --- 8) Titre trop générique ---
+    # 7) Ciblage par marque/gamme (petits bonus de liquidité)
+    qn = norm(query_name)
+    if "omega" in qn:
+        if any(k in t for k in ["seamaster", "constellation", "de ville", "geneve", "genève"]):
+            add(+6, "gamme Omega recherchée")
+    if "longines" in qn:
+        if any(k in t for k in ["conquest", "flagship", "hydroconquest"]):
+            add(+4, "gamme Longines recherchée")
+    if "tissot" in qn:
+        if any(k in t for k in ["visodate", "seastar", "prx"]):
+            add(+3, "gamme Tissot recherchée")
+
+    # 8) Titres trop génériques -> prudence
     if len(t) < 12 or t in ["montre", "omega", "tissot", "longines", "mido", "frederique constant", "frederique"]:
         add(-10, "titre trop générique (bruit/risque)")
 
-    # Clamp
     score = max(0, min(100, score))
-
-    # Garder les 6 raisons les plus impactantes
-    reasons_sorted = sorted(reasons, key=lambda x: abs(x[0]), reverse=True)[:6]
-    reasons_out = [f"{d:+} {w}" for d, w in reasons_sorted]
-
-    return score, reasons_out
+    reasons_sorted = sorted(reasons, key=lambda x: abs(int(x.split(" ")[0])), reverse=True)[:6]
+    return score, reasons_sorted
 
 
 # ------------------ discord (format + raisons + image) ------------------
 
-def discord_notify(
-    webhook_env: str,
-    title: str,
-    url: str,
-    image_url: str = None,
-    score: int = None,
-    query_name: str = None,
-    reasons=None
-):
+def discord_notify(webhook_env: str, title: str, url: str, image_url: str = None, score: int = None, query_name: str = None, reasons=None):
     wh = os.environ.get(webhook_env)
     if not wh:
         print("[NO WEBHOOK]", webhook_env)
@@ -220,7 +213,6 @@ def discord_notify(
     badge = score_badge(s)
     reasons = reasons or []
 
-    # Texte (mobile friendly)
     content_lines = []
     if query_name:
         content_lines.append(f"🔔 **{query_name}**")
@@ -228,7 +220,6 @@ def discord_notify(
     content_lines.append(url)
     content = "\n".join(content_lines)
 
-    # Embed
     desc_lines = [f"{badge} **Score FLIP {s}/100**"]
     if reasons:
         desc_lines.append("")
@@ -351,6 +342,8 @@ def main():
     total_sent = 0
     item_fetch_budget = MAX_ITEM_FETCH_PER_RUN
 
+    dropped_by_score = 0
+
     for q in cfg.get("queries", []):
         name = q.get("name", "Query")
         include = q.get("include", [])
@@ -404,6 +397,16 @@ def main():
                 if not matches(it["title"], include, exclude):
                     continue
 
+                # Score (avant envoi)
+                sc, why = score_listing(it["title"], query_name=name)
+
+                # Option A : seuil
+                if sc < MIN_SCORE_TO_SEND:
+                    dropped_by_score += 1
+                    # IMPORTANT: on marque quand même alerté pour éviter de le revoir à chaque run
+                    new_alerted.add(cid)
+                    continue
+
                 # Caps
                 if total_sent >= MAX_ALERTS_PER_RUN:
                     print("[STOP] max alerts per run reached (global)")
@@ -411,12 +414,6 @@ def main():
                 if query_sent >= MAX_ALERTS_PER_QUERY:
                     print(f"[STOP] max alerts per query reached ({name})")
                     break
-
-                sc, why = score_listing(it["title"], query_name=name)
-
-                # ---- Filtre final : gain de temps ----
-                if sc < SCORE_MIN_TO_ALERT:
-                    continue
 
                 new_alerted.add(cid)
 
@@ -447,9 +444,8 @@ def main():
     save_json(STATE_FILE, state)
 
     print(
-        f"[END] sent={total_sent} "
-        f"seen_ids={len(state['seen_ids'])} "
-        f"alerted_ids={len(state['alerted_ids'])} "
+        f"[END] sent={total_sent} dropped_by_score={dropped_by_score} "
+        f"seen_ids={len(state['seen_ids'])} alerted_ids={len(state['alerted_ids'])} "
         f"item_fetch_left={item_fetch_budget}"
     )
 
