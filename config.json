@@ -8,7 +8,7 @@
         "réplique", "replica", "fake",
 
         "quartz", "pile", "battery", "digital",
-        "electronique", "électronique", "electronic", "electronique",
+        "electronique", "électronique", "electronic",
 
         "piece", "pièce", "pieces", "pièces",
         "parts", "spares", "spare",
@@ -19,7 +19,10 @@
         "strap only", "bracelet only"
       ],
       "vinted_urls": [
-        "https://www.vinted.fr/catalog?catalog%5B%5D=97&brand_ids%5B%5D=194842&price_from=100&price_to=450&currency=EUR&search_text=Omega%20Seamaster&order=newest_first"
+        "https://www.vinted.fr/catalog?catalog[]=97&brand_ids[]=194842&price_from=100&price_to=450&currency=EUR&search_text=Omega%20Seamaster&order=newest_first",
+        "https://www.vinted.fr/catalog?catalog[]=97&brand_ids[]=194842&price_from=100&price_to=400&currency=EUR&search_text=Omega%20Geneve&order=newest_first",
+        "https://www.vinted.fr/catalog?catalog[]=97&brand_ids[]=194842&price_from=150&price_to=450&currency=EUR&search_text=Omega%20Constellation&order=newest_first",
+        "https://www.vinted.fr/catalog?catalog[]=97&brand_ids[]=194842&price_from=120&price_to=450&currency=EUR&search_text=Omega%20De%20Ville&order=newest_first"
       ]
     },
     {
@@ -30,7 +33,7 @@
         "réplique", "replica", "fake", "mod",
 
         "quartz", "pile", "battery", "digital",
-        "electronique", "électronique", "electronic", "electronique",
+        "electronique", "électronique", "electronic",
 
         "piece", "pièce", "pieces", "pièces",
         "parts", "spares", "spare",
@@ -41,8 +44,8 @@
         "strap only", "bracelet only"
       ],
       "vinted_urls": [
-        "https://www.vinted.fr/catalog?catalog%5B%5D=97&brand_ids%5B%5D=38365&price_from=50&price_to=350&currency=EUR&search_text=Tissot%20Visodate&order=newest_first",
-        "https://www.vinted.fr/catalog?catalog%5B%5D=97&brand_ids%5B%5D=38365&price_from=50&price_to=350&currency=EUR&search_text=Tissot%20Seastar&order=newest_first"
+        "https://www.vinted.fr/catalog?catalog[]=97&brand_ids[]=38365&price_from=50&price_to=350&currency=EUR&search_text=Tissot%20Visodate&order=newest_first",
+        "https://www.vinted.fr/catalog?catalog[]=97&brand_ids[]=38365&price_from=50&price_to=350&currency=EUR&search_text=Tissot%20Seastar&order=newest_first"
       ]
     },
     {
@@ -53,7 +56,7 @@
         "réplique", "replica", "fake", "mod",
 
         "quartz", "pile", "battery", "digital",
-        "electronique", "électronique", "electronic", "electronique",
+        "electronique", "électronique", "electronic",
 
         "piece", "pièce", "pieces", "pièces",
         "parts", "spares", "spare",
@@ -64,8 +67,8 @@
         "strap only", "bracelet only"
       ],
       "vinted_urls": [
-        "https://www.vinted.fr/catalog?catalog%5B%5D=97&brand_ids%5B%5D=249482&price_from=150&price_to=500&currency=EUR&search_text=Longines%20Flagship&order=newest_first",
-        "https://www.vinted.fr/catalog?catalog%5B%5D=97&brand_ids%5B%5D=249482&price_from=150&price_to=500&currency=EUR&search_text=Longines%20Conquest&order=newest_first"
+        "https://www.vinted.fr/catalog?catalog[]=97&brand_ids[]=249482&price_from=150&price_to=500&currency=EUR&search_text=Longines%20Flagship&order=newest_first",
+        "https://www.vinted.fr/catalog?catalog[]=97&brand_ids[]=249482&price_from=150&price_to=500&currency=EUR&search_text=Longines%20Conquest&order=newest_first"
       ]
     },
     {
@@ -76,7 +79,7 @@
         "réplique", "replica", "fake", "mod",
 
         "quartz", "pile", "battery", "digital",
-        "electronique", "électronique", "electronic", "electronique",
+        "electronique", "électronique", "electronic",
 
         "piece", "pièce", "pieces", "pièces",
         "parts", "spares", "spare",
@@ -87,8 +90,8 @@
         "strap only", "bracelet only"
       ],
       "vinted_urls": [
-        "https://www.vinted.fr/catalog?catalog%5B%5D=97&brand_ids%5B%5D=323292&price_from=100&price_to=300&currency=EUR&search_text=Mido%20Multifort&order=newest_first",
-        "https://www.vinted.fr/catalog?catalog%5B%5D=97&brand_ids%5B%5D=323292&price_from=100&price_to=300&currency=EUR&search_text=Mido%20Commander&order=newest_first"
+        "https://www.vinted.fr/catalog?catalog[]=97&brand_ids[]=323292&price_from=100&price_to=300&currency=EUR&search_text=Mido%20Multifort&order=newest_first",
+        "https://www.vinted.fr/catalog?catalog[]=97&brand_ids[]=323292&price_from=100&price_to=300&currency=EUR&search_text=Mido%20Commander&order=newest_first"
       ]
     },
     {
@@ -101,7 +104,7 @@
         "réplique", "replica", "fake",
 
         "quartz", "pile", "battery", "digital",
-        "electronique", "électronique", "electronic", "electronique",
+        "electronique", "électronique", "electronic",
 
         "piece", "pièce", "pieces", "pièces",
         "parts", "spares", "spare",
@@ -112,7 +115,7 @@
         "strap only", "bracelet only"
       ],
       "vinted_urls": [
-        "https://www.vinted.fr/catalog?catalog%5B%5D=97&brand_ids%5B%5D=447195&price_from=100&price_to=400&currency=EUR&search_text=Frederique%20Constant&order=newest_first"
+        "https://www.vinted.fr/catalog?catalog[]=97&brand_ids[]=447195&price_from=100&price_to=400&currency=EUR&search_text=Frederique%20Constant&order=newest_first"
       ]
     }
   ]
